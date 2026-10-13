@@ -141,6 +141,7 @@ pub struct Device {
 
 /// A route that has been (at least partially) uploaded to the comma servers.
 /// `create_time` is when the first upload URL was requested for the route.
+/// Note: some timestamp fields arrive as ISO-8601 strings rather than numeric Unix timestamps.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Route {
     pub fullname: String,
@@ -167,10 +168,12 @@ pub struct Route {
     pub version: Option<String>,
     #[serde(default)]
     pub platform: Option<String>,
+    /// Often an ISO-8601 string (e.g. "2026-10-11T15:24:41") rather than a Unix timestamp.
     #[serde(default)]
-    pub start_time: Option<f64>,
+    pub start_time: Option<String>,
+    /// Often an ISO-8601 string rather than a Unix timestamp.
     #[serde(default)]
-    pub end_time: Option<f64>,
+    pub end_time: Option<String>,
     #[serde(default)]
     pub start_lat: Option<f64>,
     #[serde(default)]
