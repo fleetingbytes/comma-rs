@@ -68,6 +68,32 @@ impl Client {
         let value = self.get(&path).await?;
         Ok(serde_json::from_value(value)?)
     }
+
+    /// List routes that have been uploaded from a device (minimally or fully).
+    ///
+    /// `created_after` is a Unix timestamp in milliseconds (optional).
+    /// Returns routes ordered by creation time (newest first, per API).
+    pub async fn get_routes(
+        &self,
+        dongle_id: &str,
+        limit: Option<u32>,
+        created_after: Option<i64>,
+    ) -> Result<Vec<Route>> {
+        let mut path = format!("/v1/devices/{}/routes", dongle_id);
+        let mut query = Vec::new();
+        if let Some(l) = limit {
+            query.push(format!("limit={}", l));
+        }
+        if let Some(ts) = created_after {
+            query.push(format!("created_after={}", ts));
+        }
+        if !query.is_empty() {
+            path.push('?');
+            path.push_str(&query.join("&"));
+        }
+        let value = self.get(&path).await?;
+        Ok(serde_json::from_value(value)?)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -83,7 +109,6 @@ pub struct Profile {
     pub username: Option<String>,
     #[serde(default)]
     pub user_id: Option<String>,
-    // Capture any additional/unknown fields so future API changes don't break parsing
     #[serde(flatten)]
     pub extra: Value,
 }
@@ -110,7 +135,46 @@ pub struct Device {
     pub last_gps_lng: Option<f64>,
     #[serde(default)]
     pub last_gps_time: Option<i64>,
-    // Allow extra fields without failing
+    #[serde(flatten)]
+    pub extra: Value,
+}
+
+/// A route that has been (at least partially) uploaded to the comma servers.
+/// `create_time` is when the first upload URL was requested for the route.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Route {
+    pub fullname: String,
+    pub dongle_id: String,
+    #[serde(default)]
+    pub create_time: Option<i64>,
+    #[serde(default)]
+    pub length: Option<f64>,
+    #[serde(default)]
+    pub is_public: Option<bool>,
+    #[serde(default)]
+    pub maxlog: Option<i32>,
+    #[serde(default)]
+    pub maxcamera: Option<i32>,
+    #[serde(default)]
+    pub maxqlog: Option<i32>,
+    #[serde(default)]
+    pub maxqcamera: Option<i32>,
+    #[serde(default)]
+    pub proclog: Option<i32>,
+    #[serde(default)]
+    pub proccamera: Option<i32>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub platform: Option<String>,
+    #[serde(default)]
+    pub start_time: Option<f64>,
+    #[serde(default)]
+    pub end_time: Option<f64>,
+    #[serde(default)]
+    pub start_lat: Option<f64>,
+    #[serde(default)]
+    pub start_lng: Option<f64>,
     #[serde(flatten)]
     pub extra: Value,
 }
