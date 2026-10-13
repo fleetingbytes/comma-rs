@@ -4,10 +4,15 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use comma_connect_api::Client;
 use config::Config;
+use tracing::{debug, info};
 
 #[derive(Parser)]
 #[command(name = "comma-cli", version, about = "CLI tools for comma devices")]
 struct Cli {
+    /// Increase logging verbosity (repeat for more detail: -v = info, -vv = debug, -vvv = trace)
+    #[arg(short, long, global = true, action = clap::ArgAction::Count)]
+    verbose: u8,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -39,6 +44,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    init_tracing(cli.verbose);
 
     match cli.command {
         Commands::Config => cmd_config()?,
@@ -51,9 +57,29 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+fn init_tracing(verbosity: u8) {
+    let level = match verbosity {
+        0 => tracing::Level::WARN,
+        1 => tracing::Level::INFO,
+        2 => tracing::Level::DEBUG,
+        _ => tracing::Level::TRACE,
+    };
+
+    tracing_subscriber::fmt()
+        .with_max_level(level)
+        .with_timer(tracing_subscriber::fmt::time::SystemTime)
+        .with_target(false)
+        .compact()
+        .with_writer(std::io::stderr)
+        .init();
+
+    debug!(verbosity, level = %level, "tracing initialized");
+}
+
 fn cmd_config() -> Result<()> {
     let path = Config::path()?;
     let cfg = Config::load()?;
+    info!(path = %path.display(), "loaded configuration");
     println!("Config file: {}", path.display());
     println!("{:#?}", cfg);
     Ok(())
@@ -63,6 +89,7 @@ fn cmd_set_dongle(dongle_id: &str) -> Result<()> {
     let mut cfg = Config::load()?;
     cfg.default_dongle_id = Some(dongle_id.to_string());
     cfg.store()?;
+    info!(dongle_id, path = %Config::path()?.display(), "updated default dongle ID");
     println!("Default dongle ID set to: {}", dongle_id);
     println!("Config written to: {}", Config::path()?.display());
     Ok(())
@@ -71,6 +98,7 @@ fn cmd_set_dongle(dongle_id: &str) -> Result<()> {
 async fn cmd_me() -> Result<()> {
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
+    info!("fetching user profile");
     let client = Client::new(token);
     let profile = client.get_me().await?;
     println!("{}", serde_json::to_string_pretty(&profile)?);
@@ -80,6 +108,7 @@ async fn cmd_me() -> Result<()> {
 async fn cmd_devices() -> Result<()> {
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
+    info!("fetching device list");
     let client = Client::new(token);
     let devices = client.get_devices().await?;
     println!("{}", serde_json::to_string_pretty(&devices)?);
@@ -92,6 +121,7 @@ async fn cmd_device(dongle_id: Option<String>) -> Result<()> {
     let id = dongle_id
         .or(cfg.default_dongle_id)
         .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `set-dongle` or pass one."))?;
+    info!(dongle_id = %id, "fetching device info");
     let client = Client::new(token);
     let device = client.get_device(&id).await?;
     println!("{}", serde_json::to_string_pretty(&device)?);
