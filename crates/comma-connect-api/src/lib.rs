@@ -4,6 +4,7 @@ pub use error::{Error, Result};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tracing::{debug, info, warn};
 
 const BASE_URL: &str = "https://api.commadotai.com";
 
@@ -23,6 +24,7 @@ impl Client {
 
     async fn get(&self, path: &str) -> Result<Value> {
         let url = format!("{}{}", BASE_URL, path);
+        debug!(url = %url, "sending GET request");
         let resp = self
             .http
             .get(&url)
@@ -35,11 +37,15 @@ impl Client {
         let body = resp.text().await?;
 
         if !status.is_success() {
+            warn!(status = %status, body = %body, "API request failed");
             return Err(Error::Api {
                 status: status.as_u16(),
                 body,
             });
         }
+
+        info!(status = %status, path = %path, "API request succeeded");
+        debug!(body_len = body.len(), "response body received");
 
         Ok(serde_json::from_str(&body)?)
     }
