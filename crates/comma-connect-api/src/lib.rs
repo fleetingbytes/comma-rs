@@ -66,7 +66,8 @@ impl Client {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Profile {
-    pub email: String,
+    #[serde(default)]
+    pub email: Option<String>,
     pub id: String,
     #[serde(default)]
     pub points: Option<i64>,
@@ -76,6 +77,9 @@ pub struct Profile {
     pub username: Option<String>,
     #[serde(default)]
     pub user_id: Option<String>,
+    // Capture any additional/unknown fields so future API changes don't break parsing
+    #[serde(flatten)]
+    pub extra: Value,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
