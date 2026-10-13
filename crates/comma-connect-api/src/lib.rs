@@ -94,6 +94,18 @@ impl Client {
         let value = self.get(&path).await?;
         Ok(serde_json::from_value(value)?)
     }
+
+    /// List the segments that make up a route.
+    ///
+    /// Each segment includes file-processing status (`proc_log`, `proc_camera`, etc.).
+    /// Route name must be the full form `dongle_id|YYYY-MM-DD--HH-MM-SS` (or equivalent).
+    /// The `|` is percent-encoded automatically.
+    pub async fn get_route_segments(&self, route_name: &str) -> Result<Vec<Segment>> {
+        let encoded = route_name.replace('|', "%7C");
+        let path = format!("/v1/route/{}/segments", encoded);
+        let value = self.get(&path).await?;
+        Ok(serde_json::from_value(value)?)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -178,6 +190,84 @@ pub struct Route {
     pub start_lat: Option<f64>,
     #[serde(default)]
     pub start_lng: Option<f64>,
+    #[serde(flatten)]
+    pub extra: Value,
+}
+
+/// A single segment (up to ~60 s) of a route.
+///
+/// File status codes (`proc_*`):
+/// - -1 = not received
+/// -  0 = upload URL sent
+/// - 10 = received
+/// - 20 = enqueued
+/// - 30 = processing
+/// - 40 = processed
+/// - 50 = errored
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Segment {
+    pub canonical_name: String,
+    pub number: i32,
+    pub canonical_route_name: String,
+    pub dongle_id: String,
+
+    #[serde(default)]
+    pub create_time: Option<i64>,
+    #[serde(default)]
+    pub start_time_utc_millis: Option<i64>,
+    #[serde(default)]
+    pub end_time_utc_millis: Option<i64>,
+
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub length: Option<f64>,
+
+    #[serde(default)]
+    pub can: Option<bool>,
+    #[serde(default)]
+    pub hpgps: Option<bool>,
+    #[serde(default)]
+    pub radar: Option<bool>,
+    #[serde(default)]
+    pub passive: Option<bool>,
+
+    #[serde(default)]
+    pub devicetype: Option<i32>,
+
+    /// Full log (`rlog`) processing status.
+    #[serde(default)]
+    pub proc_log: Option<i32>,
+    /// Decimated log (`qlog`) processing status (nullable).
+    #[serde(default)]
+    pub proc_qlog: Option<i32>,
+    /// Road camera processing status.
+    #[serde(default)]
+    pub proc_camera: Option<i32>,
+    /// Driver camera processing status.
+    #[serde(default)]
+    pub proc_dcamera: Option<i32>,
+
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub git_commit: Option<String>,
+    #[serde(default)]
+    pub git_branch: Option<String>,
+    #[serde(default)]
+    pub git_remote: Option<String>,
+    #[serde(default)]
+    pub git_dirty: Option<bool>,
+
+    #[serde(default)]
+    pub start_lat: Option<f64>,
+    #[serde(default)]
+    pub start_lng: Option<f64>,
+    #[serde(default)]
+    pub end_lat: Option<f64>,
+    #[serde(default)]
+    pub end_lng: Option<f64>,
+
     #[serde(flatten)]
     pub extra: Value,
 }
