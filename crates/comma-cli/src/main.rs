@@ -4,7 +4,10 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use comma_connect_api::Client;
 use config::Config;
+use std::fs::{self, OpenOptions};
+use std::path::PathBuf;
 use tracing::{debug, info};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 #[derive(Parser)]
 #[command(name = "comma-cli", version, about = "CLI tools for comma devices")]
@@ -54,7 +57,8 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    init_tracing(cli.verbose);
+    let log_path = init_tracing(cli.verbose)?;
+    info!(log_file = %log_path.display(), "file logging enabled");
 
     match cli.command {
         Commands::Config => cmd_config()?,
@@ -68,23 +72,56 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn init_tracing(verbosity: u8) {
+fn state_dir() -> PathBuf {
+    if let Ok(xdg) = std::env::var("XDG_STATE_HOME") {
+        if !xdg.is_empty() {
+            return PathBuf::from(xdg).join("comma-rs");
+        }
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        return PathBuf::from(home).join(".local/state/comma-rs");
+    }
+    PathBuf::from(".local/state/comma-rs")
+}
+
+fn init_tracing(verbosity: u8) -> Result<PathBuf> {
     let level = match verbosity {
-        0 => tracing::Level::WARN,
-        1 => tracing::Level::INFO,
-        2 => tracing::Level::DEBUG,
-        _ => tracing::Level::TRACE,
+        0 => "warn",
+        1 => "info",
+        2 => "debug",
+        _ => "trace",
     };
 
-    tracing_subscriber::fmt()
-        .with_max_level(level)
+    let dir = state_dir();
+    fs::create_dir_all(&dir)?;
+    let log_path = dir.join("comma-cli.log");
+
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)?;
+
+    let stderr_layer = tracing_subscriber::fmt::layer()
         .with_timer(tracing_subscriber::fmt::time::SystemTime)
         .with_target(false)
         .compact()
         .with_writer(std::io::stderr)
+        .with_filter(EnvFilter::new(level));
+
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_timer(tracing_subscriber::fmt::time::SystemTime)
+        .with_target(true)
+        .with_ansi(false)
+        .with_writer(file)
+        .with_filter(EnvFilter::new("trace"));
+
+    tracing_subscriber::registry()
+        .with(stderr_layer)
+        .with(file_layer)
         .init();
 
-    debug!(verbosity, level = %level, "tracing initialized");
+    debug!(verbosity, level, log_file = %log_path.display(), "tracing initialized");
+    Ok(log_path)
 }
 
 fn cmd_config() -> Result<()> {
