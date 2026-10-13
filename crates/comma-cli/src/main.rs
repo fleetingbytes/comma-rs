@@ -39,6 +39,16 @@ enum Commands {
         /// Dongle ID (optional if default is set)
         dongle_id: Option<String>,
     },
+
+    /// List routes that have been uploaded from a device (minimally or fully)
+    Routes {
+        /// Dongle ID (optional if default is set)
+        dongle_id: Option<String>,
+
+        /// Maximum number of routes to return
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
 }
 
 #[tokio::main]
@@ -52,6 +62,7 @@ async fn main() -> Result<()> {
         Commands::Me => cmd_me().await?,
         Commands::Devices => cmd_devices().await?,
         Commands::Device { dongle_id } => cmd_device(dongle_id).await?,
+        Commands::Routes { dongle_id, limit } => cmd_routes(dongle_id, limit).await?,
     }
 
     Ok(())
@@ -125,5 +136,18 @@ async fn cmd_device(dongle_id: Option<String>) -> Result<()> {
     let client = Client::new(token);
     let device = client.get_device(&id).await?;
     println!("{}", serde_json::to_string_pretty(&device)?);
+    Ok(())
+}
+
+async fn cmd_routes(dongle_id: Option<String>, limit: u32) -> Result<()> {
+    let cfg = Config::load()?;
+    let token = cfg.resolve_token()?;
+    let id = dongle_id
+        .or(cfg.default_dongle_id)
+        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `set-dongle` or pass one."))?;
+    info!(dongle_id = %id, limit, "fetching uploaded routes");
+    let client = Client::new(token);
+    let routes = client.get_routes(&id, Some(limit), None).await?;
+    println!("{}", serde_json::to_string_pretty(&routes)?);
     Ok(())
 }
