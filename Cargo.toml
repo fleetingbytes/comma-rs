@@ -6,7 +6,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.96.1"
+rust-version = "1.98.1"
 authors = ["fleetingbytes <7075397+fleetingbytes@users.noreply.github.com>", "SpaceXAI"]
 description = "Command line apps for Comma devices"
 repository = "https://github.com/fleetingbytes/comma-rs"
