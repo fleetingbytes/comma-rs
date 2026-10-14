@@ -67,6 +67,36 @@ async fn request_upload_queue(world: &mut World) -> comma_test_utils::Result<()>
     Ok(())
 }
 
+#[when("I request an upload URL for the first segment of the most recent route")]
+async fn request_upload_url(world: &mut World) -> comma_test_utils::Result<()> {
+    let client = world.client.as_ref().unwrap();
+    let dongle = require_dongle()?;
+    let routes = client.get_routes(&dongle, Some(1), None).await?;
+    let route = routes.first().ok_or("no routes returned")?;
+    let ts = route
+        .fullname
+        .split('|')
+        .nth(1)
+        .ok_or("route name missing timestamp")?;
+    let path = format!("{}--0/fcamera.hevc", ts);
+    let urls = client
+        .get_upload_urls(&dongle, &[path], Some(1))
+        .await?;
+    world.last_json = Some(serde_json::to_value(&urls)?);
+    Ok(())
+}
+
+#[then("the first element of the response has a string field \"url\"")]
+async fn first_element_has_url(world: &mut World) -> comma_test_utils::Result<()> {
+    let v = world.last_json.as_ref().ok_or("no response stored")?;
+    let arr = v.as_array().ok_or("response is not an array")?;
+    let first = arr.first().ok_or("array is empty")?;
+    let obj = first.as_object().ok_or("first element is not an object")?;
+    let url = obj.get("url").ok_or("missing url")?;
+    assert!(url.is_string(), "url is not a string");
+    Ok(())
+}
+
 #[then("the response is a JSON object")]
 async fn response_is_object(world: &mut World) -> comma_test_utils::Result<()> {
     let v = world.last_json.as_ref().ok_or("no response stored")?;

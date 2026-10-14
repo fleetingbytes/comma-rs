@@ -109,6 +109,14 @@ impl Client {
         Ok(serde_json::from_value(value)?)
     }
 
+    /// Fetch summary information for a single route (includes `maxqlog`, etc.).
+    pub async fn get_route(&self, route_name: &str) -> Result<Route> {
+        let encoded = route_name.replace('|', "%7C");
+        let path = format!("/v1/route/{}/", encoded);
+        let value = self.get(&path).await?;
+        Ok(serde_json::from_value(value)?)
+    }
+
     /// Query the device's current upload queue via Athena (`listUploadQueue`).
     ///
     /// Returns the files currently queued or actively uploading, including a
@@ -156,6 +164,103 @@ impl Client {
         }
         let result = value.get("result").cloned().unwrap_or(Value::Array(vec![]));
         Ok(serde_json::from_value(result)?)
+    }
+
+    /// Request signed upload URLs for a list of device-relative paths.
+    ///
+    /// `paths` are of the form `{route_ts}--{segment}/filename`, e.g.
+    /// `00000148--846422f721--0/fcamera.hevc`.
+    /// `expiry_days` must be between 1 and 30 (default 7).
+    pub async fn get_upload_urls(
+        &self,
+        dongle_id: &str,
+        paths: &[String],
+        expiry_days: Option<u32>,
+    ) -> Result<Vec<UploadUrl>> {
+        let path = format!("/v1/{}/upload_urls/", dongle_id);
+        let body = serde_json::json!({
+            "paths": paths,
+            "expiry_days": expiry_days.unwrap_or(7)
+        });
+        debug!(dongle_id, count = paths.len(), "requesting upload URLs");
+        let url = format!("{}{}", BASE_URL, path);
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("JWT {}", self.token))
+            .header("User-Agent", "comma-rs/0.1.0")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let text = resp.text().await?;
+        if !status.is_success() {
+            warn!(status = %status, body = %text, "upload_urls request failed");
+            return Err(Error::Api {
+                status: status.as_u16(),
+                body: text,
+            });
+        }
+        Ok(serde_json::from_str(&text)?)
+    }
+
+    /// Ask the device (via Athena) to upload the given files to the provided URLs.
+    ///
+    /// `priority` 1 is the high priority used by comma connect.
+    /// `expiry_seconds` is how long the request stays in the offline queue if the
+    /// device is offline (default 7 days).
+    pub async fn upload_files_to_urls(
+        &self,
+        dongle_id: &str,
+        files: &[UploadFileRequest],
+        expiry_seconds: Option<u64>,
+    ) -> Result<Value> {
+        const ATHENA_URL: &str = "https://athena.comma.ai";
+        let url = format!("{}/{}", ATHENA_URL, dongle_id);
+        let expiry = expiry_seconds.unwrap_or(60 * 60 * 24 * 7);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "uploadFilesToUrls",
+            "params": {
+                "files_data": serde_json::to_value(files)?
+            },
+            "id": 0,
+            "expiry": now + expiry
+        });
+        debug!(dongle_id, count = files.len(), "sending Athena uploadFilesToUrls");
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("JWT {}", self.token))
+            .header("User-Agent", "comma-rs/0.1.0")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let text = resp.text().await?;
+        if !status.is_success() {
+            warn!(status = %status, body = %text, "Athena uploadFilesToUrls failed");
+            return Err(Error::Api {
+                status: status.as_u16(),
+                body: text,
+            });
+        }
+        let value: Value = serde_json::from_str(&text)?;
+        if let Some(err) = value.get("error") {
+            return Err(Error::Api {
+                status: status.as_u16(),
+                body: err.to_string(),
+            });
+        }
+        Ok(value)
     }
 }
 
@@ -293,4 +398,26 @@ pub struct RouteFiles {
     pub qcameras: Vec<String>,
     #[serde(flatten)]
     pub extra: Value,
+}
+
+/// A signed URL the device can PUT a file to.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UploadUrl {
+    pub url: String,
+    #[serde(default)]
+    pub headers: Option<std::collections::HashMap<String, String>>,
+}
+
+/// One file the device should upload, as expected by Athena `uploadFilesToUrls`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UploadFileRequest {
+    #[serde(rename = "fn")]
+    pub file_name: String,
+    pub url: String,
+    #[serde(default)]
+    pub headers: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub allow_cellular: bool,
+    /// Lower number = higher priority. comma connect uses 1.
+    pub priority: i32,
 }

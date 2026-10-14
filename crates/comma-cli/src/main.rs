@@ -70,6 +70,20 @@ enum Commands {
         /// Dongle ID (optional if default is set or COMMA_DONGLE is present)
         dongle_id: Option<String>,
     },
+
+    /// Request upload of road camera files (fcamera.hevc) for a route
+    UploadRoadCamera {
+        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        name: String,
+
+        /// Dongle ID (required only when `name` does not already contain the dongle)
+        #[arg(long)]
+        dongle: Option<String>,
+
+        /// Only request this many segments (default: all missing)
+        #[arg(long)]
+        limit: Option<u32>,
+    },
 }
 
 #[tokio::main]
@@ -87,6 +101,9 @@ async fn main() -> Result<()> {
         Commands::Routes { dongle_id, limit } => cmd_routes(dongle_id, limit).await?,
         Commands::RouteFiles { name, dongle } => cmd_route_files(name, dongle).await?,
         Commands::UploadQueue { dongle_id } => cmd_upload_queue(dongle_id).await?,
+        Commands::UploadRoadCamera { name, dongle, limit } => {
+            cmd_upload_road_camera(name, dongle, limit).await?
+        }
     }
 
     Ok(())
@@ -258,6 +275,96 @@ async fn cmd_upload_queue(dongle_id: Option<String>) -> Result<()> {
     } else {
         println!("{}", serde_json::to_string_pretty(&queue)?);
     }
+    Ok(())
+}
+
+async fn cmd_upload_road_camera(
+    name: String,
+    dongle: Option<String>,
+    limit: Option<u32>,
+) -> Result<()> {
+    use comma_connect_api::UploadFileRequest;
+
+    let cfg = Config::load()?;
+    let token = cfg.resolve_token()?;
+    let route_name = resolve_route_name(
+        &name,
+        dongle.as_deref(),
+        cfg.resolve_dongle().as_deref(),
+    )?;
+    let dongle_id = route_name
+        .split('|')
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("route name missing dongle id"))?
+        .to_string();
+    let route_ts = route_name
+        .split('|')
+        .nth(1)
+        .ok_or_else(|| anyhow::anyhow!("route name missing timestamp part"))?
+        .to_string();
+
+    info!(route_name = %route_name, "requesting road camera upload");
+    let client = Client::new(token);
+
+    let route = client.get_route(&route_name).await?;
+    let segment_count = route
+        .maxqlog
+        .map(|m| m + 1)
+        .or_else(|| {
+            // fall back: if maxqlog missing, we'll discover later
+            None
+        })
+        .ok_or_else(|| anyhow::anyhow!("route has no maxqlog; cannot determine segment count"))?;
+
+    let files = client.get_route_files(&route_name).await?;
+    let already = files.cameras.len() as i32;
+    info!(segment_count, already_uploaded = already, "segment status");
+
+    let mut paths = Vec::new();
+    for n in 0..segment_count {
+        if (n as usize) < files.cameras.len() {
+            // cameras array is ordered by segment; a present URL means uploaded
+            continue;
+        }
+        paths.push(format!("{}--{}/fcamera.hevc", route_ts, n));
+        if let Some(lim) = limit {
+            if paths.len() as u32 >= lim {
+                break;
+            }
+        }
+    }
+
+    if paths.is_empty() {
+        println!("All road camera segments already uploaded (or none missing).");
+        return Ok(());
+    }
+
+    println!("Requesting upload for {} road-camera file(s)...", paths.len());
+    let urls = client.get_upload_urls(&dongle_id, &paths, Some(7)).await?;
+    if urls.len() != paths.len() {
+        return Err(anyhow::anyhow!(
+            "upload_urls returned {} URLs for {} paths",
+            urls.len(),
+            paths.len()
+        ));
+    }
+
+    let requests: Vec<UploadFileRequest> = paths
+        .into_iter()
+        .zip(urls)
+        .map(|(fn_, u)| UploadFileRequest {
+            file_name: fn_,
+            url: u.url,
+            headers: u.headers.unwrap_or_default(),
+            allow_cellular: false,
+            priority: 1,
+        })
+        .collect();
+
+    let result = client
+        .upload_files_to_urls(&dongle_id, &requests, None)
+        .await?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
 }
 
