@@ -17,3 +17,13 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+cucumber.workspace = true
+comma-test-utils.workspace = true
+tokio.workspace = true
+
+[[test]]
+name = "api"
+harness = false
+path = "tests/api.rs"

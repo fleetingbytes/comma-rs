@@ -95,14 +95,16 @@ impl Client {
         Ok(serde_json::from_value(value)?)
     }
 
-    /// List the segments that make up a route.
+    /// Retrieve the uploaded files for a route.
     ///
-    /// Each segment includes file-processing status (`proc_log`, `proc_camera`, etc.).
-    /// Route name must be the full form `dongle_id|YYYY-MM-DD--HH-MM-SS` (or equivalent).
-    /// The `|` is percent-encoded automatically.
-    pub async fn get_route_segments(&self, route_name: &str) -> Result<Vec<Segment>> {
+    /// Returns signed URLs (valid ~1 hour) for each file type, indexed by segment number.
+    /// An empty array for a type means no segments of that type have been uploaded.
+    /// Note: the previously documented `/v1/route/{name}/segments` endpoint returns 404
+    /// on the live API; this is the practical source of per-segment upload status.
+    /// The `|` in the route name is percent-encoded automatically.
+    pub async fn get_route_files(&self, route_name: &str) -> Result<RouteFiles> {
         let encoded = route_name.replace('|', "%7C");
-        let path = format!("/v1/route/{}/segments", encoded);
+        let path = format!("/v1/route/{}/files", encoded);
         let value = self.get(&path).await?;
         Ok(serde_json::from_value(value)?)
     }
@@ -268,6 +270,27 @@ pub struct Segment {
     #[serde(default)]
     pub end_lng: Option<f64>,
 
+    #[serde(flatten)]
+    pub extra: Value,
+}
+
+/// Uploaded files for a route, grouped by type.
+/// Each array is ordered by segment number; a missing or empty array means
+/// that file type has not been uploaded for any segment.
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct RouteFiles {
+    #[serde(default)]
+    pub cameras: Vec<String>,
+    #[serde(default)]
+    pub dcameras: Vec<String>,
+    #[serde(default)]
+    pub ecameras: Vec<String>,
+    #[serde(default)]
+    pub logs: Vec<String>,
+    #[serde(default)]
+    pub qlogs: Vec<String>,
+    #[serde(default)]
+    pub qcameras: Vec<String>,
     #[serde(flatten)]
     pub extra: Value,
 }

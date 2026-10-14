@@ -53,13 +53,14 @@ enum Commands {
         limit: u32,
     },
 
-    /// List segments belonging to a route (includes log/camera upload status)
-    RouteSegments {
+    /// List uploaded files for a route (signed URLs; presence indicates upload status)
+    RouteFiles {
         /// Route name: full form `dongle|timestamp` or just the timestamp part
         /// (e.g. `44379c05b64fd7e3|00000144--e88a1a5266` or `00000144--e88a1a5266`)
         name: String,
 
-        /// Dongle ID (required only when `name` does not already contain the dongle)
+        /// Dongle ID (required only when `name` does not already contain the dongle).
+        /// Falls back to `COMMA_DONGLE` env var, then config default.
         #[arg(long)]
         dongle: Option<String>,
     },
@@ -78,7 +79,7 @@ async fn main() -> Result<()> {
         Commands::Devices => cmd_devices().await?,
         Commands::Device { dongle_id } => cmd_device(dongle_id).await?,
         Commands::Routes { dongle_id, limit } => cmd_routes(dongle_id, limit).await?,
-        Commands::RouteSegments { name, dongle } => cmd_route_segments(name, dongle).await?,
+        Commands::RouteFiles { name, dongle } => cmd_route_files(name, dongle).await?,
     }
 
     Ok(())
@@ -179,8 +180,8 @@ async fn cmd_device(dongle_id: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
     let id = dongle_id
-        .or(cfg.default_dongle_id)
-        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `set-dongle` or pass one."))?;
+        .or(cfg.resolve_dongle())
+        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `set-dongle`, set COMMA_DONGLE, or pass one."))?;
     info!(dongle_id = %id, "fetching device info");
     let client = Client::new(token);
     let device = client.get_device(&id).await?;
@@ -192,8 +193,8 @@ async fn cmd_routes(dongle_id: Option<String>, limit: u32) -> Result<()> {
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
     let id = dongle_id
-        .or(cfg.default_dongle_id)
-        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `set-dongle` or pass one."))?;
+        .or(cfg.resolve_dongle())
+        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `set-dongle`, set COMMA_DONGLE, or pass one."))?;
     info!(dongle_id = %id, limit, "fetching uploaded routes");
     let client = Client::new(token);
     let routes = client.get_routes(&id, Some(limit), None).await?;
@@ -214,21 +215,25 @@ fn resolve_route_name(
             .or(default_dongle)
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "Route name does not contain a dongle ID and neither --dongle nor a default dongle was provided"
+                    "Route name does not contain a dongle ID and neither --dongle, COMMA_DONGLE, nor a default dongle was provided"
                 )
             })?;
         Ok(format!("{}|{}", id, name))
     }
 }
 
-async fn cmd_route_segments(name: String, dongle: Option<String>) -> Result<()> {
+async fn cmd_route_files(name: String, dongle: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
-    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.default_dongle_id.as_deref())?;
-    info!(route_name = %route_name, "fetching route segments");
+    let route_name = resolve_route_name(
+        &name,
+        dongle.as_deref(),
+        cfg.resolve_dongle().as_deref(),
+    )?;
+    info!(route_name = %route_name, "fetching route files");
     let client = Client::new(token);
-    let segments = client.get_route_segments(&route_name).await?;
-    println!("{}", serde_json::to_string_pretty(&segments)?);
+    let files = client.get_route_files(&route_name).await?;
+    println!("{}", serde_json::to_string_pretty(&files)?);
     Ok(())
 }
 

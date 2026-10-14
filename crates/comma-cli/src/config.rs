@@ -40,4 +40,14 @@ impl Config {
                 "No token found. Set the COMMA_TOKEN environment variable or store one in the config."
             ))
     }
+
+    /// Resolve the default dongle ID: `COMMA_DONGLE` env var takes precedence over config.
+    pub fn resolve_dongle(&self) -> Option<String> {
+        if let Ok(id) = std::env::var("COMMA_DONGLE") {
+            if !id.is_empty() {
+                return Some(id);
+            }
+        }
+        self.default_dongle_id.clone().filter(|s| !s.is_empty())
+    }
 }
