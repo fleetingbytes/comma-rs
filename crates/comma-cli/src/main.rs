@@ -43,8 +43,23 @@ enum Commands {
         dongle_id: Option<String>,
     },
 
+    /// Inspect routes
+    Route {
+        #[command(subcommand)]
+        command: RouteCommands,
+    },
+
+    /// Upload files from the device
+    Upload {
+        #[command(subcommand)]
+        command: UploadCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum RouteCommands {
     /// List routes that have been uploaded from a device (minimally or fully)
-    Routes {
+    List {
         /// Dongle ID (optional if default is set)
         dongle_id: Option<String>,
 
@@ -54,7 +69,7 @@ enum Commands {
     },
 
     /// List uploaded files for a route (signed URLs; presence indicates upload status)
-    RouteFiles {
+    Files {
         /// Route name: full form `dongle|timestamp` or just the timestamp part
         /// (e.g. `44379c05b64fd7e3|00000144--e88a1a5266` or `00000144--e88a1a5266`)
         name: String,
@@ -64,15 +79,18 @@ enum Commands {
         #[arg(long)]
         dongle: Option<String>,
     },
+}
 
+#[derive(Subcommand)]
+enum UploadCommands {
     /// Show the device's current Athena upload queue (files and progress)
-    UploadQueue {
+    Queue {
         /// Dongle ID (optional if default is set or COMMA_DONGLE is present)
         dongle_id: Option<String>,
     },
 
     /// Request upload of road camera files (fcamera.hevc) for a route
-    UploadRoadCamera {
+    RoadCamera {
         /// Route name: full form `dongle|timestamp` or just the timestamp part
         name: String,
 
@@ -98,12 +116,16 @@ async fn main() -> Result<()> {
         Commands::Me => cmd_me().await?,
         Commands::Devices => cmd_devices().await?,
         Commands::Device { dongle_id } => cmd_device(dongle_id).await?,
-        Commands::Routes { dongle_id, limit } => cmd_routes(dongle_id, limit).await?,
-        Commands::RouteFiles { name, dongle } => cmd_route_files(name, dongle).await?,
-        Commands::UploadQueue { dongle_id } => cmd_upload_queue(dongle_id).await?,
-        Commands::UploadRoadCamera { name, dongle, limit } => {
-            cmd_upload_road_camera(name, dongle, limit).await?
-        }
+        Commands::Route { command } => match command {
+            RouteCommands::List { dongle_id, limit } => cmd_routes(dongle_id, limit).await?,
+            RouteCommands::Files { name, dongle } => cmd_route_files(name, dongle).await?,
+        },
+        Commands::Upload { command } => match command {
+            UploadCommands::Queue { dongle_id } => cmd_upload_queue(dongle_id).await?,
+            UploadCommands::RoadCamera { name, dongle, limit } => {
+                cmd_upload_road_camera(name, dongle, limit).await?
+            }
+        },
     }
 
     Ok(())
