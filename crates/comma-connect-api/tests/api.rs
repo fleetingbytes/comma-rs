@@ -58,6 +58,15 @@ async fn request_route_files(world: &mut World) -> comma_test_utils::Result<()> 
     Ok(())
 }
 
+#[when("I request the upload queue for the dongle")]
+async fn request_upload_queue(world: &mut World) -> comma_test_utils::Result<()> {
+    let client = world.client.as_ref().unwrap();
+    let dongle = require_dongle()?;
+    let queue = client.list_upload_queue(&dongle).await?;
+    world.last_json = Some(serde_json::to_value(&queue)?);
+    Ok(())
+}
+
 #[then("the response is a JSON object")]
 async fn response_is_object(world: &mut World) -> comma_test_utils::Result<()> {
     let v = world.last_json.as_ref().ok_or("no response stored")?;

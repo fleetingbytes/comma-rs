@@ -64,6 +64,12 @@ enum Commands {
         #[arg(long)]
         dongle: Option<String>,
     },
+
+    /// Show the device's current Athena upload queue (files and progress)
+    UploadQueue {
+        /// Dongle ID (optional if default is set or COMMA_DONGLE is present)
+        dongle_id: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -80,6 +86,7 @@ async fn main() -> Result<()> {
         Commands::Device { dongle_id } => cmd_device(dongle_id).await?,
         Commands::Routes { dongle_id, limit } => cmd_routes(dongle_id, limit).await?,
         Commands::RouteFiles { name, dongle } => cmd_route_files(name, dongle).await?,
+        Commands::UploadQueue { dongle_id } => cmd_upload_queue(dongle_id).await?,
     }
 
     Ok(())
@@ -234,6 +241,23 @@ async fn cmd_route_files(name: String, dongle: Option<String>) -> Result<()> {
     let client = Client::new(token);
     let files = client.get_route_files(&route_name).await?;
     println!("{}", serde_json::to_string_pretty(&files)?);
+    Ok(())
+}
+
+async fn cmd_upload_queue(dongle_id: Option<String>) -> Result<()> {
+    let cfg = Config::load()?;
+    let token = cfg.resolve_token()?;
+    let id = dongle_id
+        .or(cfg.resolve_dongle())
+        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `set-dongle`, set COMMA_DONGLE, or pass one."))?;
+    info!(dongle_id = %id, "fetching upload queue via Athena");
+    let client = Client::new(token);
+    let queue = client.list_upload_queue(&id).await?;
+    if queue.is_empty() {
+        println!("Upload queue is empty.");
+    } else {
+        println!("{}", serde_json::to_string_pretty(&queue)?);
+    }
     Ok(())
 }
 

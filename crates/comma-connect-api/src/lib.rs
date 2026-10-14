@@ -108,6 +108,55 @@ impl Client {
         let value = self.get(&path).await?;
         Ok(serde_json::from_value(value)?)
     }
+
+    /// Query the device's current upload queue via Athena (`listUploadQueue`).
+    ///
+    /// Returns the files currently queued or actively uploading, including a
+    /// `progress` value in the range 0.0–1.0. Requires the device to be online;
+    /// if it is offline the Athena response will indicate that (or the call may fail).
+    pub async fn list_upload_queue(&self, dongle_id: &str) -> Result<Vec<UploadQueueItem>> {
+        const ATHENA_URL: &str = "https://athena.comma.ai";
+        let url = format!("{}/{}", ATHENA_URL, dongle_id);
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "listUploadQueue",
+            "params": {},
+            "id": 0
+        });
+        debug!(url = %url, "sending Athena listUploadQueue");
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("JWT {}", self.token))
+            .header("User-Agent", "comma-rs/0.1.0")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let text = resp.text().await?;
+
+        if !status.is_success() {
+            warn!(status = %status, body = %text, "Athena request failed");
+            return Err(Error::Api {
+                status: status.as_u16(),
+                body: text,
+            });
+        }
+
+        let value: Value = serde_json::from_str(&text)?;
+        // Athena returns { "jsonrpc": "...", "id": ..., "result": [...] }
+        // or an error object.
+        if let Some(err) = value.get("error") {
+            return Err(Error::Api {
+                status: status.as_u16(),
+                body: err.to_string(),
+            });
+        }
+        let result = value.get("result").cloned().unwrap_or(Value::Array(vec![]));
+        Ok(serde_json::from_value(result)?)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -196,80 +245,31 @@ pub struct Route {
     pub extra: Value,
 }
 
-/// A single segment (up to ~60 s) of a route.
+/// An item in the device's Athena upload queue.
 ///
-/// File status codes (`proc_*`):
-/// - -1 = not received
-/// -  0 = upload URL sent
-/// - 10 = received
-/// - 20 = enqueued
-/// - 30 = processing
-/// - 40 = processed
-/// - 50 = errored
+/// `progress` is a fraction in [0.0, 1.0] (bytes sent / total size).
+/// `current` is true while the item is actively being uploaded.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Segment {
-    pub canonical_name: String,
-    pub number: i32,
-    pub canonical_route_name: String,
-    pub dongle_id: String,
-
+pub struct UploadQueueItem {
     #[serde(default)]
-    pub create_time: Option<i64>,
-    #[serde(default)]
-    pub start_time_utc_millis: Option<i64>,
-    #[serde(default)]
-    pub end_time_utc_millis: Option<i64>,
-
+    pub path: Option<String>,
     #[serde(default)]
     pub url: Option<String>,
     #[serde(default)]
-    pub length: Option<f64>,
-
+    pub id: Option<String>,
     #[serde(default)]
-    pub can: Option<bool>,
+    pub created_at: Option<i64>,
     #[serde(default)]
-    pub hpgps: Option<bool>,
+    pub retry_count: Option<i32>,
     #[serde(default)]
-    pub radar: Option<bool>,
+    pub current: Option<bool>,
+    /// Upload progress as a fraction 0.0–1.0.
     #[serde(default)]
-    pub passive: Option<bool>,
-
+    pub progress: Option<f64>,
     #[serde(default)]
-    pub devicetype: Option<i32>,
-
-    /// Full log (`rlog`) processing status.
+    pub allow_cellular: Option<bool>,
     #[serde(default)]
-    pub proc_log: Option<i32>,
-    /// Decimated log (`qlog`) processing status (nullable).
-    #[serde(default)]
-    pub proc_qlog: Option<i32>,
-    /// Road camera processing status.
-    #[serde(default)]
-    pub proc_camera: Option<i32>,
-    /// Driver camera processing status.
-    #[serde(default)]
-    pub proc_dcamera: Option<i32>,
-
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default)]
-    pub git_commit: Option<String>,
-    #[serde(default)]
-    pub git_branch: Option<String>,
-    #[serde(default)]
-    pub git_remote: Option<String>,
-    #[serde(default)]
-    pub git_dirty: Option<bool>,
-
-    #[serde(default)]
-    pub start_lat: Option<f64>,
-    #[serde(default)]
-    pub start_lng: Option<f64>,
-    #[serde(default)]
-    pub end_lat: Option<f64>,
-    #[serde(default)]
-    pub end_lng: Option<f64>,
-
+    pub priority: Option<i32>,
     #[serde(flatten)]
     pub extra: Value,
 }
