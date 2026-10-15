@@ -126,6 +126,34 @@ enum UploadCommands {
         #[arg(long)]
         limit: Option<u32>,
     },
+
+    /// Request upload of wide road camera files (ecamera.hevc) for a route
+    WideRoadCamera {
+        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        name: String,
+
+        /// Dongle ID (required only when `name` does not already contain the dongle)
+        #[arg(long)]
+        dongle: Option<String>,
+
+        /// Only request this many segments (default: all missing)
+        #[arg(long)]
+        limit: Option<u32>,
+    },
+
+    /// Request upload of driver camera files (dcamera.hevc) for a route
+    DriverCamera {
+        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        name: String,
+
+        /// Dongle ID (required only when `name` does not already contain the dongle)
+        #[arg(long)]
+        dongle: Option<String>,
+
+        /// Only request this many segments (default: all missing)
+        #[arg(long)]
+        limit: Option<u32>,
+    },
 }
 
 #[tokio::main]
@@ -152,7 +180,13 @@ async fn main() -> Result<()> {
         Commands::Upload { command } => match command {
             UploadCommands::Queue { dongle_id } => cmd_upload_queue(dongle_id).await?,
             UploadCommands::RoadCamera { name, dongle, limit } => {
-                cmd_upload_road_camera(name, dongle, limit).await?
+                cmd_upload_camera(CameraKind::Road, name, dongle, limit).await?
+            }
+            UploadCommands::WideRoadCamera { name, dongle, limit } => {
+                cmd_upload_camera(CameraKind::WideRoad, name, dongle, limit).await?
+            }
+            UploadCommands::DriverCamera { name, dongle, limit } => {
+                cmd_upload_camera(CameraKind::Driver, name, dongle, limit).await?
             }
         },
     }
@@ -339,7 +373,8 @@ async fn cmd_upload_queue(dongle_id: Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_upload_road_camera(
+async fn cmd_upload_camera(
+    kind: CameraKind,
     name: String,
     dongle: Option<String>,
     limit: Option<u32>,
@@ -364,30 +399,25 @@ async fn cmd_upload_road_camera(
         .ok_or_else(|| anyhow::anyhow!("route name missing timestamp part"))?
         .to_string();
 
-    info!(route_name = %route_name, "requesting road camera upload");
+    info!(route_name = %route_name, camera = kind.display(), "requesting camera upload");
     let client = Client::new(token);
 
     let route = client.get_route(&route_name).await?;
     let segment_count = route
         .maxqlog
         .map(|m| m + 1)
-        .or_else(|| {
-            // fall back: if maxqlog missing, we'll discover later
-            None
-        })
         .ok_or_else(|| anyhow::anyhow!("route has no maxqlog; cannot determine segment count"))?;
 
     let files = client.get_route_files(&route_name).await?;
-    let already = files.cameras.len() as i32;
-    info!(segment_count, already_uploaded = already, "segment status");
+    let already = kind.uploaded(&files);
+    info!(segment_count, already_uploaded = already.len(), "segment status");
 
     let mut paths = Vec::new();
     for n in 0..segment_count {
-        if (n as usize) < files.cameras.len() {
-            // cameras array is ordered by segment; a present URL means uploaded
+        if (n as usize) < already.len() {
             continue;
         }
-        paths.push(format!("{}--{}/fcamera.hevc", route_ts, n));
+        paths.push(format!("{}--{}/{}", route_ts, n, kind.filename()));
         if let Some(lim) = limit {
             if paths.len() as u32 >= lim {
                 break;
@@ -396,11 +426,18 @@ async fn cmd_upload_road_camera(
     }
 
     if paths.is_empty() {
-        println!("All road camera segments already uploaded (or none missing).");
+        println!(
+            "All {} segments already uploaded (or none missing).",
+            kind.display()
+        );
         return Ok(());
     }
 
-    println!("Requesting upload for {} road-camera file(s)...", paths.len());
+    println!(
+        "Requesting upload for {} {} file(s)...",
+        paths.len(),
+        kind.display()
+    );
     let urls = client.get_upload_urls(&dongle_id, &paths, Some(7)).await?;
     if urls.len() != paths.len() {
         return Err(anyhow::anyhow!(
@@ -427,6 +464,39 @@ async fn cmd_upload_road_camera(
         .await?;
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
+}
+
+#[derive(Clone, Copy)]
+enum CameraKind {
+    Road,
+    WideRoad,
+    Driver,
+}
+
+impl CameraKind {
+    fn filename(self) -> &'static str {
+        match self {
+            CameraKind::Road => "fcamera.hevc",
+            CameraKind::WideRoad => "ecamera.hevc",
+            CameraKind::Driver => "dcamera.hevc",
+        }
+    }
+
+    fn display(self) -> &'static str {
+        match self {
+            CameraKind::Road => "road camera",
+            CameraKind::WideRoad => "wide road camera",
+            CameraKind::Driver => "driver camera",
+        }
+    }
+
+    fn uploaded(self, files: &comma_connect_api::RouteFiles) -> &[String] {
+        match self {
+            CameraKind::Road => &files.cameras,
+            CameraKind::WideRoad => &files.ecameras,
+            CameraKind::Driver => &files.dcameras,
+        }
+    }
 }
 
 #[cfg(test)]
