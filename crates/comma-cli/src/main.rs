@@ -154,6 +154,20 @@ enum UploadCommands {
         #[arg(long)]
         limit: Option<u32>,
     },
+
+    /// Request upload of full log files (rlog.zst) for a route
+    Logs {
+        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        name: String,
+
+        /// Dongle ID (required only when `name` does not already contain the dongle)
+        #[arg(long)]
+        dongle: Option<String>,
+
+        /// Only request this many segments (default: all missing)
+        #[arg(long)]
+        limit: Option<u32>,
+    },
 }
 
 #[tokio::main]
@@ -180,13 +194,16 @@ async fn main() -> Result<()> {
         Commands::Upload { command } => match command {
             UploadCommands::Queue { dongle_id } => cmd_upload_queue(dongle_id).await?,
             UploadCommands::RoadCamera { name, dongle, limit } => {
-                cmd_upload_camera(CameraKind::Road, name, dongle, limit).await?
+                cmd_upload_files(FileKind::Road, name, dongle, limit).await?
             }
             UploadCommands::WideRoadCamera { name, dongle, limit } => {
-                cmd_upload_camera(CameraKind::WideRoad, name, dongle, limit).await?
+                cmd_upload_files(FileKind::WideRoad, name, dongle, limit).await?
             }
             UploadCommands::DriverCamera { name, dongle, limit } => {
-                cmd_upload_camera(CameraKind::Driver, name, dongle, limit).await?
+                cmd_upload_files(FileKind::Driver, name, dongle, limit).await?
+            }
+            UploadCommands::Logs { name, dongle, limit } => {
+                cmd_upload_files(FileKind::Logs, name, dongle, limit).await?
             }
         },
     }
@@ -373,8 +390,8 @@ async fn cmd_upload_queue(dongle_id: Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_upload_camera(
-    kind: CameraKind,
+async fn cmd_upload_files(
+    kind: FileKind,
     name: String,
     dongle: Option<String>,
     limit: Option<u32>,
@@ -399,7 +416,7 @@ async fn cmd_upload_camera(
         .ok_or_else(|| anyhow::anyhow!("route name missing timestamp part"))?
         .to_string();
 
-    info!(route_name = %route_name, camera = kind.display(), "requesting camera upload");
+    info!(route_name = %route_name, kind = kind.display(), "requesting upload");
     let client = Client::new(token);
 
     let route = client.get_route(&route_name).await?;
@@ -467,34 +484,38 @@ async fn cmd_upload_camera(
 }
 
 #[derive(Clone, Copy)]
-enum CameraKind {
+enum FileKind {
     Road,
     WideRoad,
     Driver,
+    Logs,
 }
 
-impl CameraKind {
+impl FileKind {
     fn filename(self) -> &'static str {
         match self {
-            CameraKind::Road => "fcamera.hevc",
-            CameraKind::WideRoad => "ecamera.hevc",
-            CameraKind::Driver => "dcamera.hevc",
+            FileKind::Road => "fcamera.hevc",
+            FileKind::WideRoad => "ecamera.hevc",
+            FileKind::Driver => "dcamera.hevc",
+            FileKind::Logs => "rlog.zst",
         }
     }
 
     fn display(self) -> &'static str {
         match self {
-            CameraKind::Road => "road camera",
-            CameraKind::WideRoad => "wide road camera",
-            CameraKind::Driver => "driver camera",
+            FileKind::Road => "road camera",
+            FileKind::WideRoad => "wide road camera",
+            FileKind::Driver => "driver camera",
+            FileKind::Logs => "logs",
         }
     }
 
     fn uploaded(self, files: &comma_connect_api::RouteFiles) -> &[String] {
         match self {
-            CameraKind::Road => &files.cameras,
-            CameraKind::WideRoad => &files.ecameras,
-            CameraKind::Driver => &files.dcameras,
+            FileKind::Road => &files.cameras,
+            FileKind::WideRoad => &files.ecameras,
+            FileKind::Driver => &files.dcameras,
+            FileKind::Logs => &files.logs,
         }
     }
 }
