@@ -166,6 +166,73 @@ impl Client {
         Ok(serde_json::from_value(result)?)
     }
 
+    /// Cancel one or more items in the device's Athena upload queue.
+    ///
+    /// `ids` are the `id` values from `list_upload_queue`. The device only
+    /// removes items that are still waiting in the queue (not the one currently
+    /// uploading). Returns the Athena JSON-RPC result object.
+    pub async fn cancel_upload(&self, dongle_id: &str, ids: &[String]) -> Result<Value> {
+        const ATHENA_URL: &str = "https://athena.comma.ai";
+        let url = format!("{}/{}", ATHENA_URL, dongle_id);
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "cancelUpload",
+            "params": {
+                "upload_id": ids
+            },
+            "id": 0
+        });
+        debug!(url = %url, count = ids.len(), "sending Athena cancelUpload");
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("JWT {}", self.token))
+            .header("User-Agent", "comma-rs/0.1.0")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = resp.status();
+        let text = resp.text().await?;
+
+        if !status.is_success() {
+            warn!(status = %status, body = %text, "Athena cancelUpload failed");
+            return Err(Error::Api {
+                status: status.as_u16(),
+                body: text,
+            });
+        }
+
+        let value: Value = serde_json::from_str(&text)?;
+        if let Some(err) = value.get("error") {
+            return Err(Error::Api {
+                status: status.as_u16(),
+                body: err.to_string(),
+            });
+        }
+        Ok(value)
+    }
+
+    /// Cancel all pending (non-current) items in the upload queue.
+    ///
+    /// Lists the queue, collects ids of items where `current` is not true,
+    /// and calls `cancel_upload` with those ids. Returns the number of ids
+    /// that were submitted for cancellation (0 if none).
+    pub async fn cancel_pending_uploads(&self, dongle_id: &str) -> Result<usize> {
+        let queue = self.list_upload_queue(dongle_id).await?;
+        let ids: Vec<String> = queue
+            .into_iter()
+            .filter(|item| item.current != Some(true))
+            .filter_map(|item| item.id)
+            .collect();
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        self.cancel_upload(dongle_id, &ids).await?;
+        Ok(ids.len())
+    }
+
     /// Request signed upload URLs for a list of device-relative paths.
     ///
     /// `paths` are of the form `{route_ts}--{segment}/filename`, e.g.

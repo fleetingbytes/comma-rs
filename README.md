@@ -27,21 +27,23 @@ Command-line tools and libraries for interacting with comma devices and the comm
 
    ```bash
    cargo build --release
-   ./target/release/comma-cli config
-   ./target/release/comma-cli set-dongle 0123456789abcdef
+   ./target/release/comma-cli config show
+   ./target/release/comma-cli config set dongle 0123456789abcdef
    ./target/release/comma-cli me
    ./target/release/comma-cli devices
-   ./target/release/comma-cli device
+   ./target/release/comma-cli upload queue list
+   ./target/release/comma-cli upload recent-routes
    ```
 
 The config file (TOML) is stored in the platform-standard location managed by `confy` (usually `~/.config/comma-cli/config.toml` on Linux).
 
 ## Current status
 
-This is an early skeleton focused on validating:
+The CLI and API client support:
 
-- Configuration loading/storing (default dongle ID)
-- Token resolution from environment variable or config
-- Meaningful responses from the live comma API (`/v1/me/`, `/v1/me/devices/`, `/v1.1/devices/:id/`)
+- Configuration (default dongle, token)
+- Profile, devices, routes, route files
+- Athena upload queue listing and cancellation (`upload queue list`, `upload queue cancel id`, `upload queue cancel pending`)
+- Requesting uploads of individual file kinds, whole routes, and recent routes
 
-Further crates and features will be added incrementally.
+Further features will be added incrementally.

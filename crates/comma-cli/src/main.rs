@@ -107,10 +107,10 @@ enum RouteCommands {
 
 #[derive(Subcommand)]
 enum UploadCommands {
-    /// Show the device's current Athena upload queue (files and progress)
+    /// Manage the device's Athena upload queue
     Queue {
-        /// Dongle ID (optional if default is set or COMMA_DONGLE is present)
-        dongle_id: Option<String>,
+        #[command(subcommand)]
+        command: QueueCommands,
     },
 
     /// Request upload of road camera files (fcamera.hevc) for a route
@@ -203,6 +203,39 @@ enum UploadCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum QueueCommands {
+    /// List the device's current Athena upload queue (files and progress)
+    List {
+        /// Dongle ID (optional if default is set or COMMA_DONGLE is present)
+        dongle_id: Option<String>,
+    },
+
+    /// Cancel uploads from the queue
+    Cancel {
+        #[command(subcommand)]
+        command: CancelCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum CancelCommands {
+    /// Cancel a single pending upload by its queue item id
+    Id {
+        /// The id of the queue item (from `upload queue list`)
+        id: String,
+
+        /// Dongle ID (optional if default is set or COMMA_DONGLE is present)
+        dongle_id: Option<String>,
+    },
+
+    /// Cancel all pending (non-current) uploads
+    Pending {
+        /// Dongle ID (optional if default is set or COMMA_DONGLE is present)
+        dongle_id: Option<String>,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -225,7 +258,17 @@ async fn main() -> Result<()> {
             RouteCommands::Files { name, dongle } => cmd_route_files(name, dongle).await?,
         },
         Commands::Upload { command } => match command {
-            UploadCommands::Queue { dongle_id } => cmd_upload_queue(dongle_id).await?,
+            UploadCommands::Queue { command } => match command {
+                QueueCommands::List { dongle_id } => cmd_upload_queue_list(dongle_id).await?,
+                QueueCommands::Cancel { command } => match command {
+                    CancelCommands::Id { id, dongle_id } => {
+                        cmd_upload_queue_cancel_id(id, dongle_id).await?
+                    }
+                    CancelCommands::Pending { dongle_id } => {
+                        cmd_upload_queue_cancel_pending(dongle_id).await?
+                    }
+                },
+            },
             UploadCommands::RoadCamera { name, dongle, limit } => {
                 cmd_upload_files(FileKind::Road, name, dongle, limit).await?
             }
@@ -414,12 +457,16 @@ async fn cmd_route_files(name: String, dongle: Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_upload_queue(dongle_id: Option<String>) -> Result<()> {
+fn resolve_dongle(cfg: &Config, dongle_id: Option<String>) -> Result<String> {
+    dongle_id
+        .or(cfg.resolve_dongle())
+        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `config set dongle`, set COMMA_DONGLE, or pass one."))
+}
+
+async fn cmd_upload_queue_list(dongle_id: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
-    let id = dongle_id
-        .or(cfg.resolve_dongle())
-        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `config set dongle`, set COMMA_DONGLE, or pass one."))?;
+    let id = resolve_dongle(&cfg, dongle_id)?;
     info!(dongle_id = %id, "fetching upload queue via Athena");
     let client = Client::new(token);
     let queue = client.list_upload_queue(&id).await?;
@@ -427,6 +474,32 @@ async fn cmd_upload_queue(dongle_id: Option<String>) -> Result<()> {
         println!("Upload queue is empty.");
     } else {
         println!("{}", serde_json::to_string_pretty(&queue)?);
+    }
+    Ok(())
+}
+
+async fn cmd_upload_queue_cancel_id(item_id: String, dongle_id: Option<String>) -> Result<()> {
+    let cfg = Config::load()?;
+    let token = cfg.resolve_token()?;
+    let id = resolve_dongle(&cfg, dongle_id)?;
+    info!(dongle_id = %id, item_id = %item_id, "cancelling upload");
+    let client = Client::new(token);
+    let result = client.cancel_upload(&id, &[item_id.clone()]).await?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
+}
+
+async fn cmd_upload_queue_cancel_pending(dongle_id: Option<String>) -> Result<()> {
+    let cfg = Config::load()?;
+    let token = cfg.resolve_token()?;
+    let id = resolve_dongle(&cfg, dongle_id)?;
+    info!(dongle_id = %id, "cancelling all pending uploads");
+    let client = Client::new(token);
+    let n = client.cancel_pending_uploads(&id).await?;
+    if n == 0 {
+        println!("No pending uploads to cancel.");
+    } else {
+        println!("Cancelled {n} pending upload(s).");
     }
     Ok(())
 }
