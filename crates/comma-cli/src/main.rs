@@ -156,7 +156,7 @@ enum UploadCommands {
     },
 
     /// Request upload of full log files (rlog.zst) for a route
-    Logs {
+    Log {
         /// Route name: full form `dongle|timestamp` or just the timestamp part
         name: String,
 
@@ -202,8 +202,8 @@ async fn main() -> Result<()> {
             UploadCommands::DriverCamera { name, dongle, limit } => {
                 cmd_upload_files(FileKind::Driver, name, dongle, limit).await?
             }
-            UploadCommands::Logs { name, dongle, limit } => {
-                cmd_upload_files(FileKind::Logs, name, dongle, limit).await?
+            UploadCommands::Log { name, dongle, limit } => {
+                cmd_upload_files(FileKind::Log, name, dongle, limit).await?
             }
         },
     }
@@ -488,7 +488,7 @@ enum FileKind {
     Road,
     WideRoad,
     Driver,
-    Logs,
+    Log,
 }
 
 impl FileKind {
@@ -497,7 +497,7 @@ impl FileKind {
             FileKind::Road => "fcamera.hevc",
             FileKind::WideRoad => "ecamera.hevc",
             FileKind::Driver => "dcamera.hevc",
-            FileKind::Logs => "rlog.zst",
+            FileKind::Log => "rlog.zst",
         }
     }
 
@@ -506,7 +506,7 @@ impl FileKind {
             FileKind::Road => "road camera",
             FileKind::WideRoad => "wide road camera",
             FileKind::Driver => "driver camera",
-            FileKind::Logs => "logs",
+            FileKind::Log => "log",
         }
     }
 
@@ -515,7 +515,7 @@ impl FileKind {
             FileKind::Road => &files.cameras,
             FileKind::WideRoad => &files.ecameras,
             FileKind::Driver => &files.dcameras,
-            FileKind::Logs => &files.logs,
+            FileKind::Log => &files.logs,
         }
     }
 }
