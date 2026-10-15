@@ -168,6 +168,21 @@ enum UploadCommands {
         #[arg(long)]
         limit: Option<u32>,
     },
+
+    /// Request upload of all file kinds for a route (road, driver, wide road, log),
+    /// zipped by segment. Already-uploaded kinds of a segment are skipped.
+    Route {
+        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        name: String,
+
+        /// Dongle ID (required only when `name` does not already contain the dongle)
+        #[arg(long)]
+        dongle: Option<String>,
+
+        /// Only process this many segments (default: all)
+        #[arg(long)]
+        limit: Option<u32>,
+    },
 }
 
 #[tokio::main]
@@ -204,6 +219,9 @@ async fn main() -> Result<()> {
             }
             UploadCommands::Log { name, dongle, limit } => {
                 cmd_upload_files(FileKind::Log, name, dongle, limit).await?
+            }
+            UploadCommands::Route { name, dongle, limit } => {
+                cmd_upload_route(name, dongle, limit).await?
             }
         },
     }
@@ -483,6 +501,115 @@ async fn cmd_upload_files(
     Ok(())
 }
 
+/// Order used by `upload route`: for each segment, request these kinds.
+/// Matches the web UI's "All Files" behavior of walking kinds per segment
+/// and skipping any kind already present for that segment.
+const ROUTE_UPLOAD_ORDER: [FileKind; 4] = [
+    FileKind::Road,
+    FileKind::Driver,
+    FileKind::WideRoad,
+    FileKind::Log,
+];
+
+/// Build the zipped path list for a whole-route upload.
+///
+/// For segment `n`, a kind is included only when `uploaded[kind].len() <= n`
+/// (the `/files` arrays are ordered by segment number). `limit` caps the
+/// number of segments considered, not the number of files.
+fn missing_route_paths(
+    route_ts: &str,
+    segment_count: i32,
+    files: &comma_connect_api::RouteFiles,
+    limit: Option<u32>,
+) -> Vec<String> {
+    let segments = match limit {
+        Some(l) => segment_count.min(l as i32),
+        None => segment_count,
+    };
+    let mut paths = Vec::new();
+    for n in 0..segments {
+        for kind in ROUTE_UPLOAD_ORDER {
+            if (n as usize) < kind.uploaded(files).len() {
+                continue;
+            }
+            paths.push(format!("{}--{}/{}", route_ts, n, kind.filename()));
+        }
+    }
+    paths
+}
+
+async fn cmd_upload_route(
+    name: String,
+    dongle: Option<String>,
+    limit: Option<u32>,
+) -> Result<()> {
+    use comma_connect_api::UploadFileRequest;
+
+    let cfg = Config::load()?;
+    let token = cfg.resolve_token()?;
+    let route_name = resolve_route_name(
+        &name,
+        dongle.as_deref(),
+        cfg.resolve_dongle().as_deref(),
+    )?;
+    let dongle_id = route_name
+        .split('|')
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("route name missing dongle id"))?
+        .to_string();
+    let route_ts = route_name
+        .split('|')
+        .nth(1)
+        .ok_or_else(|| anyhow::anyhow!("route name missing timestamp part"))?
+        .to_string();
+
+    info!(route_name = %route_name, "requesting whole-route upload");
+    let client = Client::new(token);
+
+    let route = client.get_route(&route_name).await?;
+    let segment_count = route
+        .maxqlog
+        .map(|m| m + 1)
+        .ok_or_else(|| anyhow::anyhow!("route has no maxqlog; cannot determine segment count"))?;
+
+    let files = client.get_route_files(&route_name).await?;
+    let paths = missing_route_paths(&route_ts, segment_count, &files, limit);
+    info!(segment_count, files = paths.len(), "whole-route plan");
+
+    if paths.is_empty() {
+        println!("All files for this route are already uploaded.");
+        return Ok(());
+    }
+
+    println!("Requesting upload for {} file(s) across the route...", paths.len());
+    let urls = client.get_upload_urls(&dongle_id, &paths, Some(7)).await?;
+    if urls.len() != paths.len() {
+        return Err(anyhow::anyhow!(
+            "upload_urls returned {} URLs for {} paths",
+            urls.len(),
+            paths.len()
+        ));
+    }
+
+    let requests: Vec<UploadFileRequest> = paths
+        .into_iter()
+        .zip(urls)
+        .map(|(fn_, u)| UploadFileRequest {
+            file_name: fn_,
+            url: u.url,
+            headers: u.headers.unwrap_or_default(),
+            allow_cellular: false,
+            priority: 1,
+        })
+        .collect();
+
+    let result = client
+        .upload_files_to_urls(&dongle_id, &requests, None)
+        .await?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
+}
+
 #[derive(Clone, Copy)]
 enum FileKind {
     Road,
@@ -557,5 +684,44 @@ mod tests {
     fn short_name_without_dongle_errors() {
         let err = resolve_route_name("00000144--e88a1a5266", None, None).unwrap_err();
         assert!(err.to_string().contains("dongle"));
+    }
+
+    #[test]
+    fn route_paths_are_zipped_by_segment_and_skip_uploaded() {
+        use comma_connect_api::RouteFiles;
+        let files = RouteFiles {
+            cameras: vec!["a".into(), "b".into()], // segments 0,1 road done
+            dcameras: vec!["a".into()],            // segment 0 driver done
+            ecameras: vec![],
+            logs: vec!["a".into(), "b".into()],    // segments 0,1 log done
+            ..Default::default()
+        };
+        let paths = super::missing_route_paths("ts", 2, &files, None);
+        // seg 0: road skipped, driver skipped, wide, log skipped
+        // seg 1: road skipped, driver, wide, log skipped
+        assert_eq!(
+            paths,
+            vec![
+                "ts--0/ecamera.hevc".to_string(),
+                "ts--1/dcamera.hevc".to_string(),
+                "ts--1/ecamera.hevc".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn route_paths_respect_segment_limit() {
+        use comma_connect_api::RouteFiles;
+        let files = RouteFiles::default();
+        let paths = super::missing_route_paths("ts", 5, &files, Some(1));
+        assert_eq!(
+            paths,
+            vec![
+                "ts--0/fcamera.hevc".to_string(),
+                "ts--0/dcamera.hevc".to_string(),
+                "ts--0/ecamera.hevc".to_string(),
+                "ts--0/rlog.zst".to_string(),
+            ]
+        );
     }
 }
