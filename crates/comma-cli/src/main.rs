@@ -22,13 +22,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Show the configuration file path and current contents
-    Config,
-
-    /// Set the default dongle ID stored in the config
-    SetDongle {
-        /// The 16-character dongle ID
-        dongle_id: String,
+    /// Configuration
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
     },
 
     /// Fetch and display the authenticated user's profile
@@ -53,6 +50,33 @@ enum Commands {
     Upload {
         #[command(subcommand)]
         command: UploadCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigCommands {
+    /// Show the configuration file path and current contents
+    Show,
+
+    /// Set a configuration value
+    Set {
+        #[command(subcommand)]
+        command: ConfigSetCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigSetCommands {
+    /// Set the default dongle ID stored in the config
+    Dongle {
+        /// The 16-character dongle ID
+        dongle_id: String,
+    },
+
+    /// Set the comma developer JWT token stored in the config
+    Token {
+        /// The JWT token
+        token: String,
     },
 }
 
@@ -111,8 +135,13 @@ async fn main() -> Result<()> {
     info!(log_file = %log_path.display(), "file logging enabled");
 
     match cli.command {
-        Commands::Config => cmd_config()?,
-        Commands::SetDongle { dongle_id } => cmd_set_dongle(&dongle_id)?,
+        Commands::Config { command } => match command {
+            ConfigCommands::Show => cmd_config()?,
+            ConfigCommands::Set { command } => match command {
+                ConfigSetCommands::Dongle { dongle_id } => cmd_set_dongle(&dongle_id)?,
+                ConfigSetCommands::Token { token } => cmd_set_token(&token)?,
+            },
+        },
         Commands::Me => cmd_me().await?,
         Commands::Devices => cmd_devices().await?,
         Commands::Device { dongle_id } => cmd_device(dongle_id).await?,
@@ -202,6 +231,16 @@ fn cmd_set_dongle(dongle_id: &str) -> Result<()> {
     Ok(())
 }
 
+fn cmd_set_token(token: &str) -> Result<()> {
+    let mut cfg = Config::load()?;
+    cfg.token = Some(token.to_string());
+    cfg.store()?;
+    info!(path = %Config::path()?.display(), "updated token");
+    println!("Token stored in config.");
+    println!("Config written to: {}", Config::path()?.display());
+    Ok(())
+}
+
 async fn cmd_me() -> Result<()> {
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
@@ -227,7 +266,7 @@ async fn cmd_device(dongle_id: Option<String>) -> Result<()> {
     let token = cfg.resolve_token()?;
     let id = dongle_id
         .or(cfg.resolve_dongle())
-        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `set-dongle`, set COMMA_DONGLE, or pass one."))?;
+        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `config set dongle`, set COMMA_DONGLE, or pass one."))?;
     info!(dongle_id = %id, "fetching device info");
     let client = Client::new(token);
     let device = client.get_device(&id).await?;
@@ -240,7 +279,7 @@ async fn cmd_routes(dongle_id: Option<String>, limit: u32) -> Result<()> {
     let token = cfg.resolve_token()?;
     let id = dongle_id
         .or(cfg.resolve_dongle())
-        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `set-dongle`, set COMMA_DONGLE, or pass one."))?;
+        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `config set dongle`, set COMMA_DONGLE, or pass one."))?;
     info!(dongle_id = %id, limit, "fetching uploaded routes");
     let client = Client::new(token);
     let routes = client.get_routes(&id, Some(limit), None).await?;
@@ -288,7 +327,7 @@ async fn cmd_upload_queue(dongle_id: Option<String>) -> Result<()> {
     let token = cfg.resolve_token()?;
     let id = dongle_id
         .or(cfg.resolve_dongle())
-        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `set-dongle`, set COMMA_DONGLE, or pass one."))?;
+        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `config set dongle`, set COMMA_DONGLE, or pass one."))?;
     info!(dongle_id = %id, "fetching upload queue via Athena");
     let client = Client::new(token);
     let queue = client.list_upload_queue(&id).await?;
