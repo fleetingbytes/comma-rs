@@ -71,7 +71,7 @@ impl Client {
 
     /// List routes that have been uploaded from a device (minimally or fully).
     ///
-    /// `created_after` is a Unix timestamp in milliseconds (optional).
+    /// `created_after` is a Unix timestamp in seconds (optional).
     /// Returns routes ordered by creation time (newest first, per API).
     pub async fn get_routes(
         &self,

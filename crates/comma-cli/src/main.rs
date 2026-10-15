@@ -183,6 +183,24 @@ enum UploadCommands {
         #[arg(long)]
         limit: Option<u32>,
     },
+
+    /// Upload all missing file kinds for recent routes.
+    ///
+    /// Without `--limit`, every route in the last `--max-days` (default 14) that
+    /// still has missing files is enqueued. With `--limit`, only the N most
+    /// recent routes in that window are considered.
+    RecentRoutes {
+        /// Dongle ID (optional if default is set or COMMA_DONGLE is present)
+        dongle_id: Option<String>,
+
+        /// Only consider this many of the most recent routes
+        #[arg(long)]
+        limit: Option<u32>,
+
+        /// Only consider routes created within this many days
+        #[arg(long, default_value_t = 14)]
+        max_days: u32,
+    },
 }
 
 #[tokio::main]
@@ -223,6 +241,11 @@ async fn main() -> Result<()> {
             UploadCommands::Route { name, dongle, limit } => {
                 cmd_upload_route(name, dongle, limit).await?
             }
+            UploadCommands::RecentRoutes {
+                dongle_id,
+                limit,
+                max_days,
+            } => cmd_upload_recent_routes(dongle_id, limit, max_days).await?,
         },
     }
 
@@ -610,6 +633,117 @@ async fn cmd_upload_route(
     Ok(())
 }
 
+/// Unix timestamp in seconds for `days` ago.
+fn cutoff_secs(now_secs: u64, days: u32) -> i64 {
+    now_secs.saturating_sub(days as u64 * 24 * 60 * 60) as i64
+}
+
+async fn enqueue_paths(
+    client: &Client,
+    dongle_id: &str,
+    paths: Vec<String>,
+) -> Result<serde_json::Value> {
+    use comma_connect_api::UploadFileRequest;
+    let urls = client.get_upload_urls(dongle_id, &paths, Some(7)).await?;
+    if urls.len() != paths.len() {
+        return Err(anyhow::anyhow!(
+            "upload_urls returned {} URLs for {} paths",
+            urls.len(),
+            paths.len()
+        ));
+    }
+    let requests: Vec<UploadFileRequest> = paths
+        .into_iter()
+        .zip(urls)
+        .map(|(fn_, u)| UploadFileRequest {
+            file_name: fn_,
+            url: u.url,
+            headers: u.headers.unwrap_or_default(),
+            allow_cellular: false,
+            priority: 1,
+        })
+        .collect();
+    Ok(client.upload_files_to_urls(dongle_id, &requests, None).await?)
+}
+
+async fn cmd_upload_recent_routes(
+    dongle_id: Option<String>,
+    limit: Option<u32>,
+    max_days: u32,
+) -> Result<()> {
+    let cfg = Config::load()?;
+    let token = cfg.resolve_token()?;
+    let id = dongle_id
+        .or(cfg.resolve_dongle())
+        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `config set dongle`, set COMMA_DONGLE, or pass one."))?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let created_after = cutoff_secs(now, max_days);
+
+    info!(dongle_id = %id, max_days, created_after, limit, "scanning recent routes");
+    let client = Client::new(token);
+    let routes = client
+        .get_routes(&id, limit, Some(created_after))
+        .await?;
+
+    if routes.is_empty() {
+        println!("No routes in the last {max_days} day(s).");
+        return Ok(());
+    }
+
+    println!(
+        "Considering {} route(s) from the last {max_days} day(s)...",
+        routes.len()
+    );
+
+    let mut enqueued_routes = 0usize;
+    let mut enqueued_files = 0usize;
+    for route in &routes {
+        let Some(maxqlog) = route.maxqlog else {
+            info!(route = %route.fullname, "skipping route with no maxqlog");
+            continue;
+        };
+        let segment_count = maxqlog + 1;
+        let route_ts = route
+            .fullname
+            .split('|')
+            .nth(1)
+            .unwrap_or(&route.fullname);
+        let files = client.get_route_files(&route.fullname).await?;
+        let paths = missing_route_paths(route_ts, segment_count, &files, None);
+        if paths.is_empty() {
+            println!("  {} — complete", route.fullname);
+            continue;
+        }
+        println!(
+            "  {} — {} missing file(s), requesting upload",
+            route.fullname,
+            paths.len()
+        );
+        let result = enqueue_paths(&client, &id, paths.clone()).await?;
+        let n = result
+            .get("result")
+            .and_then(|r| r.get("enqueued"))
+            .and_then(|n| n.as_u64())
+            .unwrap_or(paths.len() as u64);
+        enqueued_routes += 1;
+        enqueued_files += n as usize;
+        info!(route = %route.fullname, enqueued = n, "route enqueued");
+    }
+
+    if enqueued_routes == 0 {
+        println!("Nothing to upload.");
+    } else {
+        println!(
+            "Enqueued {enqueued_files} file(s) across {enqueued_routes} route(s)."
+        );
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy)]
 enum FileKind {
     Road,
@@ -723,5 +857,12 @@ mod tests {
                 "ts--0/rlog.zst".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn cutoff_is_days_ago_in_seconds() {
+        // 2026-10-15 00:00:00 UTC = 1792022400
+        let cutoff = super::cutoff_secs(1792022400, 14);
+        assert_eq!(cutoff, 1792022400 - 14 * 24 * 60 * 60);
     }
 }
