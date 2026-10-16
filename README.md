@@ -6,6 +6,7 @@ Command-line tools and libraries for interacting with comma devices and the comm
 
 - `comma-connect-api`: Async Rust client for `https://api.commadotai.com`
 - `comma-cli`: CLI application that demonstrates configuration handling and basic API calls
+- `comma-test-utils`: Shared helpers for cucumber/BDD tests (not published)
 
 ## Quick start
 
@@ -47,3 +48,25 @@ The CLI and API client support:
 - Requesting uploads of individual file kinds, whole routes, and recent routes
 
 Further features will be added incrementally.
+
+## Contributing
+
+We use [Conventional Commits](https://www.conventionalcommits.org/) for commit messages. This enables automatic semantic versioning and changelog generation via [release-plz](https://release-plz.dev/).
+
+Examples:
+
+- `feat(cli): add support for ...` (minor bump for the CLI crate)
+- `fix(api): handle null email` (patch bump for the API crate)
+- `feat!: breaking change to Client API` (major bump)
+- `chore: update dependencies`
+
+Scopes (e.g. `(cli)`, `(api)`) are optional but helpful. release-plz determines which crates to version based on which package files changed in the commits.
+
+### CI/CD
+
+- Pushes and PRs to `master` run CI (fmt, clippy, tests excluding live API integration tests, build).
+- On push to `master`, release-plz creates/updates a release PR with version bumps and changelogs for affected crates, and publishes unpublished crates to crates.io.
+
+Set the `CARGO_REGISTRY_TOKEN` repository secret (with `publish-new` and `publish-update` scopes) for publishing. For first-time publishes of new crates, you may need to publish manually once before trusted publishing can be fully used.
+
+See the [release-plz quickstart](https://release-plz.dev/docs/github/quickstart) for more details, including enabling workflow permissions to create PRs.

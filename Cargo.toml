@@ -4,14 +4,13 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
 edition = "2024"
 rust-version = "1.98.1"
 authors = ["fleetingbytes <7075397+fleetingbytes@users.noreply.github.com>", "SpaceXAI"]
 description = "Command line apps for Comma devices"
 repository = "https://github.com/fleetingbytes/comma-rs"
-homepage = "https://crates.io/comma-cli/latest/comma-cli"
-documentation = "https://docs.rs/comma-cli/latest/comma-cli"
+homepage = "https://crates.io/crates/comma-cli"
+documentation = "https://docs.rs/comma-cli"
 license = "BSD-2-Clause"
 keywords = ["tools", "comma", "commaai", "openpilot"]
 categories = ["command-line-utilities"]
