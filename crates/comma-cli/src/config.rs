@@ -28,10 +28,10 @@ impl Config {
 
     /// Resolve the token: environment variable takes precedence over config.
     pub fn resolve_token(&self) -> anyhow::Result<String> {
-        if let Ok(token) = std::env::var("COMMA_TOKEN") {
-            if !token.is_empty() {
-                return Ok(token);
-            }
+        if let Ok(token) = std::env::var("COMMA_TOKEN")
+            && !token.is_empty()
+        {
+            return Ok(token);
         }
         self.token
             .clone()
@@ -43,10 +43,10 @@ impl Config {
 
     /// Resolve the default dongle ID: `COMMA_DONGLE` env var takes precedence over config.
     pub fn resolve_dongle(&self) -> Option<String> {
-        if let Ok(id) = std::env::var("COMMA_DONGLE") {
-            if !id.is_empty() {
-                return Some(id);
-            }
+        if let Ok(id) = std::env::var("COMMA_DONGLE")
+            && !id.is_empty()
+        {
+            return Some(id);
         }
         self.default_dongle_id.clone().filter(|s| !s.is_empty())
     }

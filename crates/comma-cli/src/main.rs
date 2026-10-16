@@ -306,10 +306,10 @@ async fn main() -> Result<()> {
 }
 
 fn state_dir() -> PathBuf {
-    if let Ok(xdg) = std::env::var("XDG_STATE_HOME") {
-        if !xdg.is_empty() {
-            return PathBuf::from(xdg).join("comma-rs");
-        }
+    if let Ok(xdg) = std::env::var("XDG_STATE_HOME")
+        && !xdg.is_empty()
+    {
+        return PathBuf::from(xdg).join("comma-rs");
     }
     if let Ok(home) = std::env::var("HOME") {
         return PathBuf::from(home).join(".local/state/comma-rs");
@@ -490,7 +490,9 @@ async fn cmd_upload_queue_cancel_id(item_id: String, dongle_id: Option<String>) 
     let id = resolve_dongle(&cfg, dongle_id)?;
     info!(dongle_id = %id, item_id = %item_id, "cancelling upload");
     let client = Client::new(token);
-    let result = client.cancel_upload(&id, &[item_id.clone()]).await?;
+    let result = client
+        .cancel_upload(&id, std::slice::from_ref(&item_id))
+        .await?;
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
 }
@@ -555,10 +557,10 @@ async fn cmd_upload_files(
             continue;
         }
         paths.push(format!("{}--{}/{}", route_ts, n, kind.filename()));
-        if let Some(lim) = limit {
-            if paths.len() as u32 >= lim {
-                break;
-            }
+        if let Some(lim) = limit
+            && paths.len() as u32 >= lim
+        {
+            break;
         }
     }
 
