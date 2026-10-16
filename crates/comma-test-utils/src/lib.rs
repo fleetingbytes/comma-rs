@@ -34,7 +34,9 @@ pub fn load_test_env() {
                     let v = v.trim().trim_matches('"').trim_matches('\'');
                     if std::env::var(k).is_err() {
                         // SAFETY: tests are single-threaded with respect to env mutation.
-                        unsafe { std::env::set_var(k, v); }
+                        unsafe {
+                            std::env::set_var(k, v);
+                        }
                     }
                 }
             }

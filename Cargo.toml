@@ -29,7 +29,7 @@ tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "registry"] }
 cucumber = "0.21"
-comma-test-utils = { path = "crates/comma-test-utils", version = "0.1.0" }
+comma-test-utils = { path = "crates/comma-test-utils" }
 
 [workspace.lints.rust]
 
