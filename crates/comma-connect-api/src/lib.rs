@@ -300,7 +300,11 @@ impl Client {
             "id": 0,
             "expiry": now + expiry
         });
-        debug!(dongle_id, count = files.len(), "sending Athena uploadFilesToUrls");
+        debug!(
+            dongle_id,
+            count = files.len(),
+            "sending Athena uploadFilesToUrls"
+        );
         let resp = self
             .http
             .post(&url)

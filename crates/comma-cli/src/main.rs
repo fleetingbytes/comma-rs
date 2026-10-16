@@ -7,7 +7,7 @@ use config::Config;
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
 use tracing::{debug, info};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Parser)]
 #[command(name = "comma-cli", version, about = "CLI tools for comma devices")]
@@ -269,21 +269,31 @@ async fn main() -> Result<()> {
                     }
                 },
             },
-            UploadCommands::RoadCamera { name, dongle, limit } => {
-                cmd_upload_files(FileKind::Road, name, dongle, limit).await?
-            }
-            UploadCommands::WideRoadCamera { name, dongle, limit } => {
-                cmd_upload_files(FileKind::WideRoad, name, dongle, limit).await?
-            }
-            UploadCommands::DriverCamera { name, dongle, limit } => {
-                cmd_upload_files(FileKind::Driver, name, dongle, limit).await?
-            }
-            UploadCommands::Log { name, dongle, limit } => {
-                cmd_upload_files(FileKind::Log, name, dongle, limit).await?
-            }
-            UploadCommands::Route { name, dongle, limit } => {
-                cmd_upload_route(name, dongle, limit).await?
-            }
+            UploadCommands::RoadCamera {
+                name,
+                dongle,
+                limit,
+            } => cmd_upload_files(FileKind::Road, name, dongle, limit).await?,
+            UploadCommands::WideRoadCamera {
+                name,
+                dongle,
+                limit,
+            } => cmd_upload_files(FileKind::WideRoad, name, dongle, limit).await?,
+            UploadCommands::DriverCamera {
+                name,
+                dongle,
+                limit,
+            } => cmd_upload_files(FileKind::Driver, name, dongle, limit).await?,
+            UploadCommands::Log {
+                name,
+                dongle,
+                limit,
+            } => cmd_upload_files(FileKind::Log, name, dongle, limit).await?,
+            UploadCommands::Route {
+                name,
+                dongle,
+                limit,
+            } => cmd_upload_route(name, dongle, limit).await?,
             UploadCommands::RecentRoutes {
                 dongle_id,
                 limit,
@@ -445,11 +455,7 @@ fn resolve_route_name(
 async fn cmd_route_files(name: String, dongle: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
-    let route_name = resolve_route_name(
-        &name,
-        dongle.as_deref(),
-        cfg.resolve_dongle().as_deref(),
-    )?;
+    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.resolve_dongle().as_deref())?;
     info!(route_name = %route_name, "fetching route files");
     let client = Client::new(token);
     let files = client.get_route_files(&route_name).await?;
@@ -514,11 +520,7 @@ async fn cmd_upload_files(
 
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
-    let route_name = resolve_route_name(
-        &name,
-        dongle.as_deref(),
-        cfg.resolve_dongle().as_deref(),
-    )?;
+    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.resolve_dongle().as_deref())?;
     let dongle_id = route_name
         .split('|')
         .next()
@@ -541,7 +543,11 @@ async fn cmd_upload_files(
 
     let files = client.get_route_files(&route_name).await?;
     let already = kind.uploaded(&files);
-    info!(segment_count, already_uploaded = already.len(), "segment status");
+    info!(
+        segment_count,
+        already_uploaded = already.len(),
+        "segment status"
+    );
 
     let mut paths = Vec::new();
     for n in 0..segment_count {
@@ -634,20 +640,12 @@ fn missing_route_paths(
     paths
 }
 
-async fn cmd_upload_route(
-    name: String,
-    dongle: Option<String>,
-    limit: Option<u32>,
-) -> Result<()> {
+async fn cmd_upload_route(name: String, dongle: Option<String>, limit: Option<u32>) -> Result<()> {
     use comma_connect_api::UploadFileRequest;
 
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
-    let route_name = resolve_route_name(
-        &name,
-        dongle.as_deref(),
-        cfg.resolve_dongle().as_deref(),
-    )?;
+    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.resolve_dongle().as_deref())?;
     let dongle_id = route_name
         .split('|')
         .next()
@@ -677,7 +675,10 @@ async fn cmd_upload_route(
         return Ok(());
     }
 
-    println!("Requesting upload for {} file(s) across the route...", paths.len());
+    println!(
+        "Requesting upload for {} file(s) across the route...",
+        paths.len()
+    );
     let urls = client.get_upload_urls(&dongle_id, &paths, Some(7)).await?;
     if urls.len() != paths.len() {
         return Err(anyhow::anyhow!(
@@ -736,7 +737,9 @@ async fn enqueue_paths(
             priority: 1,
         })
         .collect();
-    Ok(client.upload_files_to_urls(dongle_id, &requests, None).await?)
+    Ok(client
+        .upload_files_to_urls(dongle_id, &requests, None)
+        .await?)
 }
 
 async fn cmd_upload_recent_routes(
@@ -758,9 +761,7 @@ async fn cmd_upload_recent_routes(
 
     info!(dongle_id = %id, max_days, created_after, limit, "scanning recent routes");
     let client = Client::new(token);
-    let routes = client
-        .get_routes(&id, limit, Some(created_after))
-        .await?;
+    let routes = client.get_routes(&id, limit, Some(created_after)).await?;
 
     if routes.is_empty() {
         println!("No routes in the last {max_days} day(s).");
@@ -780,11 +781,7 @@ async fn cmd_upload_recent_routes(
             continue;
         };
         let segment_count = maxqlog + 1;
-        let route_ts = route
-            .fullname
-            .split('|')
-            .nth(1)
-            .unwrap_or(&route.fullname);
+        let route_ts = route.fullname.split('|').nth(1).unwrap_or(&route.fullname);
         let files = client.get_route_files(&route.fullname).await?;
         let paths = missing_route_paths(route_ts, segment_count, &files, None);
         if paths.is_empty() {
@@ -810,9 +807,7 @@ async fn cmd_upload_recent_routes(
     if enqueued_routes == 0 {
         println!("Nothing to upload.");
     } else {
-        println!(
-            "Enqueued {enqueued_files} file(s) across {enqueued_routes} route(s)."
-        );
+        println!("Enqueued {enqueued_files} file(s) across {enqueued_routes} route(s).");
     }
     Ok(())
 }
@@ -867,23 +862,15 @@ mod tests {
 
     #[test]
     fn short_name_uses_explicit_dongle() {
-        let resolved = resolve_route_name(
-            "00000144--e88a1a5266",
-            Some("44379c05b64fd7e3"),
-            None,
-        )
-        .unwrap();
+        let resolved =
+            resolve_route_name("00000144--e88a1a5266", Some("44379c05b64fd7e3"), None).unwrap();
         assert_eq!(resolved, "44379c05b64fd7e3|00000144--e88a1a5266");
     }
 
     #[test]
     fn short_name_falls_back_to_default_dongle() {
-        let resolved = resolve_route_name(
-            "00000144--e88a1a5266",
-            None,
-            Some("44379c05b64fd7e3"),
-        )
-        .unwrap();
+        let resolved =
+            resolve_route_name("00000144--e88a1a5266", None, Some("44379c05b64fd7e3")).unwrap();
         assert_eq!(resolved, "44379c05b64fd7e3|00000144--e88a1a5266");
     }
 
@@ -900,7 +887,7 @@ mod tests {
             cameras: vec!["a".into(), "b".into()], // segments 0,1 road done
             dcameras: vec!["a".into()],            // segment 0 driver done
             ecameras: vec![],
-            logs: vec!["a".into(), "b".into()],    // segments 0,1 log done
+            logs: vec!["a".into(), "b".into()], // segments 0,1 log done
             ..Default::default()
         };
         let paths = super::missing_route_paths("ts", 2, &files, None);
