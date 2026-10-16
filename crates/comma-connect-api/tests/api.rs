@@ -1,8 +1,8 @@
 //! Cucumber tests for the comma connect API client.
 
-use cucumber::{given, then, when, World as _};
 use comma_connect_api::Client;
-use comma_test_utils::{load_test_env, require_dongle, require_token, World};
+use comma_test_utils::{World, load_test_env, require_dongle, require_token};
+use cucumber::{World as _, given, then, when};
 
 #[given("an authenticated client")]
 async fn authenticated_client(world: &mut World) -> comma_test_utils::Result<()> {
@@ -49,9 +49,7 @@ async fn request_route_files(world: &mut World) -> comma_test_utils::Result<()> 
     let client = world.client.as_ref().unwrap();
     let dongle = require_dongle()?;
     let routes = client.get_routes(&dongle, Some(1), None).await?;
-    let route = routes
-        .first()
-        .ok_or("no routes returned for the dongle")?;
+    let route = routes.first().ok_or("no routes returned for the dongle")?;
     let files = client.get_route_files(&route.fullname).await?;
     world.last_json = Some(serde_json::to_value(&files)?);
     world.last_files = Some(files);
@@ -79,9 +77,7 @@ async fn request_upload_url(world: &mut World) -> comma_test_utils::Result<()> {
         .nth(1)
         .ok_or("route name missing timestamp")?;
     let path = format!("{}--0/fcamera.hevc", ts);
-    let urls = client
-        .get_upload_urls(&dongle, &[path], Some(1))
-        .await?;
+    let urls = client.get_upload_urls(&dongle, &[path], Some(1)).await?;
     world.last_json = Some(serde_json::to_value(&urls)?);
     Ok(())
 }
@@ -112,7 +108,10 @@ async fn response_is_array(world: &mut World) -> comma_test_utils::Result<()> {
 }
 
 #[then(regex = r#"the response contains a string field \"(?P<field>.*)\""#)]
-async fn response_has_string_field(world: &mut World, field: String) -> comma_test_utils::Result<()> {
+async fn response_has_string_field(
+    world: &mut World,
+    field: String,
+) -> comma_test_utils::Result<()> {
     let v = world.last_json.as_ref().ok_or("no response stored")?;
     let obj = v.as_object().ok_or("response is not an object")?;
     let val = obj.get(&field).ok_or(format!("missing field {field}"))?;
@@ -121,7 +120,10 @@ async fn response_has_string_field(world: &mut World, field: String) -> comma_te
 }
 
 #[then(regex = r#"the response contains an array field \"(?P<field>.*)\""#)]
-async fn response_has_array_field(world: &mut World, field: String) -> comma_test_utils::Result<()> {
+async fn response_has_array_field(
+    world: &mut World,
+    field: String,
+) -> comma_test_utils::Result<()> {
     let v = world.last_json.as_ref().ok_or("no response stored")?;
     let obj = v.as_object().ok_or("response is not an object")?;
     let val = obj.get(&field).ok_or(format!("missing field {field}"))?;
@@ -129,28 +131,44 @@ async fn response_has_array_field(world: &mut World, field: String) -> comma_tes
     Ok(())
 }
 
-#[then(regex = r#"every element of the response is an object with a string field \"(?P<field>.*)\""#)]
-async fn every_element_has_string_field(world: &mut World, field: String) -> comma_test_utils::Result<()> {
+#[then(
+    regex = r#"every element of the response is an object with a string field \"(?P<field>.*)\""#
+)]
+async fn every_element_has_string_field(
+    world: &mut World,
+    field: String,
+) -> comma_test_utils::Result<()> {
     let v = world.last_json.as_ref().ok_or("no response stored")?;
     let arr = v.as_array().ok_or("response is not an array")?;
     for (i, el) in arr.iter().enumerate() {
-        let obj = el.as_object().ok_or(format!("element {i} is not an object"))?;
-        let val = obj.get(&field).ok_or(format!("element {i} missing {field}"))?;
+        let obj = el
+            .as_object()
+            .ok_or(format!("element {i} is not an object"))?;
+        let val = obj
+            .get(&field)
+            .ok_or(format!("element {i} missing {field}"))?;
         assert!(val.is_string(), "element {i} field {field} is not a string");
     }
     Ok(())
 }
 
 #[then(regex = r#"if the array is non-empty, every element has a string field \"(?P<field>.*)\""#)]
-async fn nonempty_elements_have_string_field(world: &mut World, field: String) -> comma_test_utils::Result<()> {
+async fn nonempty_elements_have_string_field(
+    world: &mut World,
+    field: String,
+) -> comma_test_utils::Result<()> {
     let v = world.last_json.as_ref().ok_or("no response stored")?;
     let arr = v.as_array().ok_or("response is not an array")?;
     if arr.is_empty() {
         return Ok(());
     }
     for (i, el) in arr.iter().enumerate() {
-        let obj = el.as_object().ok_or(format!("element {i} is not an object"))?;
-        let val = obj.get(&field).ok_or(format!("element {i} missing {field}"))?;
+        let obj = el
+            .as_object()
+            .ok_or(format!("element {i} is not an object"))?;
+        let val = obj
+            .get(&field)
+            .ok_or(format!("element {i} missing {field}"))?;
         assert!(val.is_string(), "element {i} field {field} is not a string");
     }
     Ok(())
@@ -159,7 +177,5 @@ async fn nonempty_elements_have_string_field(world: &mut World, field: String) -
 #[tokio::main]
 async fn main() {
     load_test_env();
-    World::cucumber()
-        .run("tests/features")
-        .await;
+    World::cucumber().run("tests/features").await;
 }
