@@ -16,7 +16,7 @@ keywords = ["tools", "comma", "commaai", "openpilot"]
 categories = ["command-line-utilities"]
 
 [workspace.dependencies]
-comma-connect-api = { path = "crates/comma-connect-api", version = "0.1.0" }
+comma-connect-api = { path = "crates/comma-connect-api", version = "0.1.1" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 confy = "2"
