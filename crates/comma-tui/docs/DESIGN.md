@@ -12,13 +12,13 @@ Related: see the individual notes in this directory.
   thumbnails, no half-block rendering, no graphics protocols.
 - **Useful before pretty.** Prioritise routes list, upload queue, device overview,
   and dongle switching. Visual flourishes (coloured route markers, etc.) come later.
-- **Configurable interaction.** Keybindings must be fully user-definable because
-  keyboard layouts differ (Colemak-DH, etc.). Defaults should feel natural to
-  Vim users.
-- **Separate but compatible config.** The TUI has its own config file. Dongle ID
-  and token can live there, but environment variables (`COMMA_TOKEN`,
-  `COMMA_DONGLE`) are preferred and shared with `comma-cli`. CLI flags override
-  both.
+- **Fixed, source-defined keybindings.** Keybindings are not user-configurable.
+  They live in one place in the source code (with associated display strings).
+  Defaults are Vim-like, with support for modifiers and multiple keys per action.
+- **Separate but compatible config.** The TUI has its own config file (TOML via
+  confy, same strategy as `comma-cli`). Dongle ID and token can live there, but
+  environment variables (`COMMA_TOKEN`, `COMMA_DONGLE`) are preferred and shared
+  with `comma-cli`. CLI flags override both.
 
 ## Main screen layout (inspired by rustnet)
 
@@ -36,9 +36,10 @@ Related: see the individual notes in this directory.
 ```
 
 - Top line: list of tabs, active tab highlighted.
-- Bottom line: context-sensitive keyboard shortcuts currently available.
-- Rightmost tab is always **Help**, which renders the current keybinding map
-  (so it stays accurate after the user customises bindings).
+- Bottom line: context-sensitive keyboard shortcuts currently available
+  (subset of bindings, ranked by importance, limited by terminal width).
+- Rightmost tab is always **Help**, which lists all keybindings (including
+  alternatives and modifiers) generated from the source-defined binding table.
 
 ## Tabs (initial set)
 
@@ -47,46 +48,60 @@ Related: see the individual notes in this directory.
 3. **Device** — overview of the active dongle.
 4. **Devices** — switch the active dongle. Lists all devices the user can access
    (owned + shared). Only one is active at a time; other tabs show data for it.
-5. **Help** — dynamic keybinding and command overview.
+5. **Help** — full keybinding and command overview (generated from source).
 
 ## Dongle selection
 
 - On startup, select the dongle from (in order): `--dongle` / `-d` CLI flag,
-  `COMMA_DONGLE` environment variable, config file, or prompt / first available.
-- The Dongles tab lets the user change the active dongle at runtime.
+  `COMMA_DONGLE` environment variable, last-selected dongle stored in the TUI
+  config, or prompt / first available.
+- The Devices tab lets the user change the active dongle at runtime.
+  The choice is persisted to the TUI config.
 - All other data tabs operate on the currently selected dongle.
+- Users who want to ignore a persisted or environment dongle temporarily can
+  use `env -u COMMA_DONGLE comma` (or pass `--dongle`).
 
 ## Configuration
 
-Own config file (e.g. `~/.config/comma-tui/config.toml` via confy or similar).
+Own config file managed by `confy` (TOML, platform-standard location, same
+strategy as `comma-cli`; typically `~/.config/comma-tui/config.toml` on Linux).
 
 Example sketch:
 
 ```toml
 default_dongle = "0123456789abcdef"
 # token = "..."   # prefer env var
-
-[keybindings]
-# Vim-like defaults, overridable
-up = "k"
-down = "j"
-left = "h"
-right = "l"
-select = "enter"
-quit = "q"
-help = "?"
-# ...
+last_dongle = "0123456789abcdef"   # written by the TUI on dongle switch
 ```
 
-Inspiration for the binding style can come from leftwm’s config, but we keep it
-simple for v1.
+Keybindings are **not** in the config; they are defined in source code.
 
 ## Keybindings
 
-- Defaults are Vim-like (`j`/`k` for down/up, etc.).
-- Completely configurable.
-- The Help tab and the bottom status bar must reflect the user’s current bindings,
-  not hard-coded strings.
+- Defined in a single place in the source code.
+- Each binding has an associated display string (e.g. `space`, `enter`,
+  `ctrl-f`) used by the bottom bar and Help tab. Changing a binding or its
+  display string requires no other edits.
+- Support for modifier keys (e.g. `Ctrl-F` / `Ctrl-B` for page up/down).
+- Multiple keys may be bound to the same action (e.g. both `j`/`k` and arrow
+  keys for movement).
+- Help tab lists all bindings for each action.
+- Bottom bar shows a ranked subset (by importance), truncated as needed for
+  terminal width. The set of hints is context-sensitive per tab (Routes has
+  upload actions, Queue has cancel, Device has alias editing, etc.).
+
+## Feature parity with the CLI
+
+The TUI should offer roughly the same interactive capabilities as the CLI
+(routes listing, upload queue management, requesting uploads of cameras/logs/
+routes/recent-routes, device alias changes, etc.).
+
+- CLI remains the right tool for scripting, one-off commands, and raw JSON
+  output.
+- TUI translates API responses into human-friendly interactive views.
+- Reusable helper logic currently living in `comma-cli/src/main.rs` (the
+  various `cmd_*` functions) should be extracted into a shared module that
+  both the CLI and TUI can use.
 
 ## Non-goals for early versions
 
@@ -94,11 +109,16 @@ simple for v1.
 - Thumbnails or coloured route icons (possible later, e.g. time-of-day colour).
 - Graphics protocol support (Kitty, Sixel, iTerm2) or half-block video.
 - Replacing the web UI’s media viewing experience.
+- User-configurable keybindings.
 
-## Open questions
+## Resolved questions
 
-- Exact config format and location.
-- Whether the bottom bar is fully dynamic or has a fixed set of always-visible hints.
-- How much of the upload-request workflow (road-camera, recent-routes, etc.)
-  belongs in the TUI versus staying in the CLI for now.
-- Persistence of the last-selected dongle across runs.
+- **Config format and location:** TOML via `confy`, same strategy as
+  `comma-cli`.
+- **Bottom bar:** Fully dynamic and context-sensitive. Number of shown hints
+  depends on terminal width and an importance ranking of the bindings.
+- **Upload-request workflow:** Offer more or less the same features in CLI
+  and TUI. Extract shared helpers from the CLI.
+- **Persistence of last-selected dongle:** Written to the TUI config.
+  Overridden by environment variable or CLI flag. Temporary override via
+  `env -u COMMA_DONGLE comma`.

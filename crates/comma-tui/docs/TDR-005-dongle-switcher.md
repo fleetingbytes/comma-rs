@@ -1,4 +1,4 @@
-# TDR-005: Dongle switcher tab
+# TDR-005: Dongle switcher tab (Devices)
 
 ## Context
 
@@ -8,20 +8,25 @@ which dongle’s data is shown in the other tabs.
 
 ## Decision
 
-- There is a dedicated **Dongles** tab that lists all accessible devices.
+- There is a dedicated **Devices** tab that lists all accessible devices.
 - Exactly one dongle is active at a time.
-- Other tabs (Routes, Queue, Devices, …) always operate on the active dongle.
+- Other tabs (Routes, Queue, Device, …) always operate on the active dongle.
 - On startup the active dongle is chosen by: CLI `--dongle`/`-d` >
-  `COMMA_DONGLE` env > config > first available (or prompt).
-- Changing the selection in the Dongles tab updates the active dongle for the
-  rest of the session (persistence across runs is optional for later).
+  `COMMA_DONGLE` env > last-selected dongle stored in the TUI config >
+  first available (or prompt).
+- Changing the selection in the Devices tab updates the active dongle for the
+  rest of the session **and** persists the choice to the TUI config.
+- Users can temporarily ignore the persisted or environment value with
+  `env -u COMMA_DONGLE comma` or by passing `--dongle`.
 
 ## Consequences
 
 - Clear model for multi-device users.
-- CLI override is honoured, matching `comma-cli` behaviour.
+- CLI and environment overrides are honoured, matching `comma-cli` behaviour.
 - Avoids the need to restart the TUI when switching devices.
+- Last-selected dongle survives across runs without requiring the user to
+  edit the config by hand.
 
 ## Status
 
-Accepted (2026-10-18)
+Accepted (2026-10-19)
