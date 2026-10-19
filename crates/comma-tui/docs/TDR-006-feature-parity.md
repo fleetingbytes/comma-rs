@@ -17,16 +17,18 @@ an interactive form.
 - Reusable logic currently living in `comma-cli/src/main.rs` (the various
   `cmd_*` helper functions) should be extracted into a shared module that
   both the CLI and the TUI can depend on.
-- As features are added, continuously check whether new helpers belong in
-  the shared module rather than being duplicated.
+- As features are added, add any necessary new helpers in the shared module
+  so that CLI would be able to readily use them and thus speed-up the
+  reimplementation of a TUI feature or vice versa (reimplementation of a new
+  CLI feature in the TUI).
 
 ## Consequences
 
 - Avoids divergent behaviour between CLI and TUI.
 - Keeps the TUI focused on presentation and interaction while reusing
   proven request/response handling.
-- Slightly more up-front refactoring of the CLI, but pays off as the TUI
-  grows.
+- Slightly more up-front refactoring of the CLI, but pays off as both the
+  CLI and TUI grows.
 
 ## Status
 
