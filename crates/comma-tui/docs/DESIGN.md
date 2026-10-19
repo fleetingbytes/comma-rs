@@ -24,14 +24,14 @@ Related: see the individual notes in this directory.
 
 ```
 ┌───────────────────────────────────────────────────────┐
-│  Routes   Queue   Devices   Dongles   Help              │  ← tab bar
+│  Routes   Queue   Device    Devices   Help            │  ← tab bar
 ├───────────────────────────────────────────────────────┤
-│                                                         │
-│  (active tab content)                                   │
-│                                                         │
-│                                                         │
+│                                                       │
+│  (active tab content)                                 │
+│                                                       │
+│                                                       │
 ├───────────────────────────────────────────────────────┤
-│  j/k: move   enter: select   q: quit   ? : help         │  ← status / key hints
+│  j/k: move   space: select   q: quit   ? : help       │  ← status / key hints
 └───────────────────────────────────────────────────────┘
 ```
 
@@ -44,8 +44,8 @@ Related: see the individual notes in this directory.
 
 1. **Routes** — list of routes for the active dongle (metadata only).
 2. **Queue** — upload queue for the active dongle.
-3. **Devices** — overview of the active dongle (and maybe others).
-4. **Dongles** — switch the active dongle. Lists all devices the user can access
+3. **Device** — overview of the active dongle.
+4. **Devices** — switch the active dongle. Lists all devices the user can access
    (owned + shared). Only one is active at a time; other tabs show data for it.
 5. **Help** — dynamic keybinding and command overview.
 
