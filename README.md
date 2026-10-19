@@ -6,6 +6,7 @@ Command-line tools and libraries for interacting with comma devices and the comm
 
 - `comma-connect-api`: Async Rust client for `https://api.commadotai.com`
 - `comma-cli`: CLI application that demonstrates configuration handling and basic API calls
+- `comma-tui`: Lightweight terminal user interface (binary name: `comma`). Early design phase; see `crates/comma-tui/docs/`.
 - `comma-test-utils`: Shared helpers for cucumber/BDD tests (not published)
 
 ## Quick start
