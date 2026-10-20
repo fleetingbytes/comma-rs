@@ -18,6 +18,7 @@ path = "src/main.rs"
 
 [dependencies]
 comma-connect-api.workspace = true
+comma-common.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 confy.workspace = true

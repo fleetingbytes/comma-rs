@@ -2,6 +2,7 @@ mod config;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use comma_common::{FileKind, cutoff_secs, missing_route_paths, resolve_route_name};
 use comma_connect_api::Client;
 use config::Config;
 use std::fs::{self, OpenOptions};
@@ -433,25 +434,6 @@ async fn cmd_routes(dongle_id: Option<String>, limit: u32) -> Result<()> {
 }
 
 /// Resolve a route name that may be either full (`dongle|ts`) or short (`ts`).
-fn resolve_route_name(
-    name: &str,
-    dongle: Option<&str>,
-    default_dongle: Option<&str>,
-) -> anyhow::Result<String> {
-    if name.contains('|') {
-        Ok(name.to_string())
-    } else {
-        let id = dongle
-            .or(default_dongle)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Route name does not contain a dongle ID and neither --dongle, COMMA_DONGLE, nor a default dongle was provided"
-                )
-            })?;
-        Ok(format!("{}|{}", id, name))
-    }
-}
-
 async fn cmd_route_files(name: String, dongle: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
     let token = cfg.resolve_token()?;
@@ -608,40 +590,11 @@ async fn cmd_upload_files(
 /// Order used by `upload route`: for each segment, request these kinds.
 /// Matches the web UI's "All Files" behavior of walking kinds per segment
 /// and skipping any kind already present for that segment.
-const ROUTE_UPLOAD_ORDER: [FileKind; 4] = [
-    FileKind::Road,
-    FileKind::Driver,
-    FileKind::WideRoad,
-    FileKind::Log,
-];
-
 /// Build the zipped path list for a whole-route upload.
 ///
 /// For segment `n`, a kind is included only when `uploaded[kind].len() <= n`
 /// (the `/files` arrays are ordered by segment number). `limit` caps the
 /// number of segments considered, not the number of files.
-fn missing_route_paths(
-    route_ts: &str,
-    segment_count: i32,
-    files: &comma_connect_api::RouteFiles,
-    limit: Option<u32>,
-) -> Vec<String> {
-    let segments = match limit {
-        Some(l) => segment_count.min(l as i32),
-        None => segment_count,
-    };
-    let mut paths = Vec::new();
-    for n in 0..segments {
-        for kind in ROUTE_UPLOAD_ORDER {
-            if (n as usize) < kind.uploaded(files).len() {
-                continue;
-            }
-            paths.push(format!("{}--{}/{}", route_ts, n, kind.filename()));
-        }
-    }
-    paths
-}
-
 async fn cmd_upload_route(name: String, dongle: Option<String>, limit: Option<u32>) -> Result<()> {
     use comma_connect_api::UploadFileRequest;
 
@@ -710,10 +663,6 @@ async fn cmd_upload_route(name: String, dongle: Option<String>, limit: Option<u3
 }
 
 /// Unix timestamp in seconds for `days` ago.
-fn cutoff_secs(now_secs: u64, days: u32) -> i64 {
-    now_secs.saturating_sub(days as u64 * 24 * 60 * 60) as i64
-}
-
 async fn enqueue_paths(
     client: &Client,
     dongle_id: &str,
@@ -814,117 +763,3 @@ async fn cmd_upload_recent_routes(
     Ok(())
 }
 
-#[derive(Clone, Copy)]
-enum FileKind {
-    Road,
-    WideRoad,
-    Driver,
-    Log,
-}
-
-impl FileKind {
-    fn filename(self) -> &'static str {
-        match self {
-            FileKind::Road => "fcamera.hevc",
-            FileKind::WideRoad => "ecamera.hevc",
-            FileKind::Driver => "dcamera.hevc",
-            FileKind::Log => "rlog.zst",
-        }
-    }
-
-    fn display(self) -> &'static str {
-        match self {
-            FileKind::Road => "road camera",
-            FileKind::WideRoad => "wide road camera",
-            FileKind::Driver => "driver camera",
-            FileKind::Log => "log",
-        }
-    }
-
-    fn uploaded(self, files: &comma_connect_api::RouteFiles) -> &[String] {
-        match self {
-            FileKind::Road => &files.cameras,
-            FileKind::WideRoad => &files.ecameras,
-            FileKind::Driver => &files.dcameras,
-            FileKind::Log => &files.logs,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::resolve_route_name;
-
-    #[test]
-    fn full_name_is_passed_through() {
-        let name = "44379c05b64fd7e3|00000144--e88a1a5266";
-        let resolved = resolve_route_name(name, None, None).unwrap();
-        assert_eq!(resolved, name);
-    }
-
-    #[test]
-    fn short_name_uses_explicit_dongle() {
-        let resolved =
-            resolve_route_name("00000144--e88a1a5266", Some("44379c05b64fd7e3"), None).unwrap();
-        assert_eq!(resolved, "44379c05b64fd7e3|00000144--e88a1a5266");
-    }
-
-    #[test]
-    fn short_name_falls_back_to_default_dongle() {
-        let resolved =
-            resolve_route_name("00000144--e88a1a5266", None, Some("44379c05b64fd7e3")).unwrap();
-        assert_eq!(resolved, "44379c05b64fd7e3|00000144--e88a1a5266");
-    }
-
-    #[test]
-    fn short_name_without_dongle_errors() {
-        let err = resolve_route_name("00000144--e88a1a5266", None, None).unwrap_err();
-        assert!(err.to_string().contains("dongle"));
-    }
-
-    #[test]
-    fn route_paths_are_zipped_by_segment_and_skip_uploaded() {
-        use comma_connect_api::RouteFiles;
-        let files = RouteFiles {
-            cameras: vec!["a".into(), "b".into()], // segments 0,1 road done
-            dcameras: vec!["a".into()],            // segment 0 driver done
-            ecameras: vec![],
-            logs: vec!["a".into(), "b".into()], // segments 0,1 log done
-            ..Default::default()
-        };
-        let paths = super::missing_route_paths("ts", 2, &files, None);
-        // seg 0: road skipped, driver skipped, wide, log skipped
-        // seg 1: road skipped, driver, wide, log skipped
-        assert_eq!(
-            paths,
-            vec![
-                "ts--0/ecamera.hevc".to_string(),
-                "ts--1/dcamera.hevc".to_string(),
-                "ts--1/ecamera.hevc".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn route_paths_respect_segment_limit() {
-        use comma_connect_api::RouteFiles;
-        let files = RouteFiles::default();
-        let paths = super::missing_route_paths("ts", 5, &files, Some(1));
-        assert_eq!(
-            paths,
-            vec![
-                "ts--0/fcamera.hevc".to_string(),
-                "ts--0/dcamera.hevc".to_string(),
-                "ts--0/ecamera.hevc".to_string(),
-                "ts--0/rlog.zst".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn cutoff_is_days_ago_in_seconds() {
-        // 2026-10-15 00:00:00 UTC = 1792022400
-        let cutoff = super::cutoff_secs(1792022400, 14);
-        assert_eq!(cutoff, 1792022400 - 14 * 24 * 60 * 60);
-    }
-}
