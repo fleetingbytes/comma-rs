@@ -1,15 +1,15 @@
 //! comma — terminal UI for comma devices.
-//!
-//! Early skeleton: tabbed layout, fixed keybindings, shared config + env + CLI
-//! overrides, last-used dongle in state, placeholder data views, Help tab.
 
 mod app;
 mod config;
+mod data;
 mod keys;
 mod ui;
 
 use anyhow::Result;
 use clap::Parser;
+use comma_common::state_dir;
+use comma_connect_api::Client;
 use crossterm::{
     event::{self, Event, KeyEventKind},
     execute,
@@ -23,8 +23,8 @@ use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::Subscribe
 
 use crate::app::App;
 use crate::config::Config;
+use crate::data::{Loader, channel};
 use crate::keys::action_for;
-use comma_common::state_dir;
 
 #[derive(Parser)]
 #[command(name = "comma", version, about = "Terminal UI for comma devices")]
@@ -87,9 +87,7 @@ fn main() -> Result<()> {
     let _log_path = init_tracing(cli.verbose)?;
 
     let config = Config::load()?;
-    // Fail early if no token is available. Later we will also validate it by listing devices.
-    let _token = config.resolve_token(cli.token.as_deref()).map_err(|e| {
-        // Ensure the helpful message reaches stderr before the TUI starts.
+    let token = config.resolve_token(cli.token.as_deref()).map_err(|e| {
         eprintln!("{e}");
         e
     })?;
@@ -97,30 +95,34 @@ fn main() -> Result<()> {
     info!("starting comma TUI");
     let mut app = App::new(config, cli.dongle.as_deref());
 
-    // Placeholder data (real API calls will replace these).
-    app.routes = vec![
-        "2026-10-11 15:24  route-001".into(),
-        "2026-10-10 09:12  route-002".into(),
-        "2026-10-09 18:45  route-003".into(),
-    ];
-    app.queue = vec!["(empty)".into()];
-    app.devices = vec![
-        "0123456789abcdef  (owned)".into(),
-        "fedcba9876543210  (shared)".into(),
-    ];
-    app.device_info = "alias: my-device\nversion: 0.9.7\nonline: yes".into();
+    let rt = tokio::runtime::Runtime::new()?;
+    let (tx, rx) = channel();
+    let client = Client::new(token);
+    let loader = Loader::new(client, tx, rt.handle().clone());
 
-    run_tui(&mut app)
+    // Initial loads
+    loader.load_devices();
+    if let Some(id) = app.active_dongle.clone() {
+        loader.load_for_dongle(&id);
+    }
+
+    let mut last_dongle = app.active_dongle.clone();
+    run_tui(&mut app, &loader, &rx, &mut last_dongle)
 }
 
-fn run_tui(app: &mut App) -> Result<()> {
+fn run_tui(
+    app: &mut App,
+    loader: &Loader,
+    rx: &std::sync::mpsc::Receiver<crate::data::DataMsg>,
+    last_dongle: &mut Option<String>,
+) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let result = loop_tui(&mut terminal, app);
+    let result = loop_tui(&mut terminal, app, loader, rx, last_dongle);
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -128,10 +130,35 @@ fn run_tui(app: &mut App) -> Result<()> {
     result
 }
 
-fn loop_tui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
+fn loop_tui(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut App,
+    loader: &Loader,
+    rx: &std::sync::mpsc::Receiver<crate::data::DataMsg>,
+    last_dongle: &mut Option<String>,
+) -> Result<()> {
     loop {
+        // Drain any completed fetches
+        while let Ok(msg) = rx.try_recv() {
+            app.apply_msg(msg);
+        }
+
+        // If the user switched dongle, reload its data
+        if app.active_dongle != *last_dongle {
+            *last_dongle = app.active_dongle.clone();
+            if let Some(id) = last_dongle.clone() {
+                app.routes_status = "loading…".into();
+                app.queue_status = "loading…".into();
+                app.device_status = "loading…".into();
+                app.routes.clear();
+                app.queue.clear();
+                app.device_detail = None;
+                loader.load_for_dongle(&id);
+            }
+        }
+
         terminal.draw(|f| ui::draw(f, app))?;
-        if event::poll(std::time::Duration::from_millis(250))? {
+        if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
                     if let Some(action) = action_for(&key) {

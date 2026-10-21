@@ -1,7 +1,9 @@
 //! Application state for the comma TUI.
 
 use crate::config::{resolve_active_dongle, store_last_dongle, Config};
+use crate::data::DataMsg;
 use crate::keys::Action;
+use comma_connect_api::{Device, Route, UploadQueueItem};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -36,34 +38,39 @@ impl Tab {
     }
 }
 
-#[allow(dead_code)]
 pub struct App {
     pub tab: Tab,
     pub selected: usize,
     pub config: Config,
     pub active_dongle: Option<String>,
-    /// Placeholder content per tab (real data will replace this).
-    pub routes: Vec<String>,
-    pub queue: Vec<String>,
-    pub devices: Vec<String>,
-    pub device_info: String,
+    pub routes: Vec<Route>,
+    pub queue: Vec<UploadQueueItem>,
+    pub devices: Vec<Device>,
+    pub device_detail: Option<Device>,
+    pub routes_status: String,
+    pub queue_status: String,
+    pub devices_status: String,
+    pub device_status: String,
     pub should_quit: bool,
 }
 
 impl App {
     pub fn new(config: Config, cli_dongle: Option<&str>) -> Self {
         let active_dongle = resolve_active_dongle(&config, cli_dongle);
-        // If no dongle resolved, start on the Devices tab so the user can pick one.
         let tab = if active_dongle.is_none() { Tab::Devices } else { Tab::Routes };
         Self {
             tab,
             selected: 0,
             config,
             active_dongle,
-            routes: vec!["(loading routes...)".into()],
-            queue: vec!["(loading queue...)".into()],
-            devices: vec!["(loading devices...)".into()],
-            device_info: "(loading device info...)".into(),
+            routes: Vec::new(),
+            queue: Vec::new(),
+            devices: Vec::new(),
+            device_detail: None,
+            routes_status: "loading…".into(),
+            queue_status: "loading…".into(),
+            devices_status: "loading…".into(),
+            device_status: "loading…".into(),
             should_quit: false,
         }
     }
@@ -84,11 +91,11 @@ impl App {
             Action::MoveUp => self.selected = self.selected.saturating_sub(1),
             Action::Select => {
                 if self.tab == Tab::Devices {
-                    if let Some(d) = self.devices.get(self.selected).cloned() {
-                        // Extract the bare dongle ID (first token) if the list shows extra info.
-                        let id = d.split_whitespace().next().unwrap_or(&d).to_string();
+                    if let Some(d) = self.devices.get(self.selected) {
+                        let id = d.dongle_id.clone();
                         self.active_dongle = Some(id.clone());
-                        let _ = store_last_dongle(&id); // best-effort persist to state file
+                        let _ = store_last_dongle(&id);
+                        // Caller (main loop) will see the change and trigger a reload.
                     }
                 }
             }
@@ -97,7 +104,53 @@ impl App {
         }
     }
 
-    /// Current list length for the active tab (for clamping selection).
+    pub fn apply_msg(&mut self, msg: DataMsg) {
+        match msg {
+            DataMsg::Devices(Ok(devs)) => {
+                self.devices = devs;
+                self.devices_status = if self.devices.is_empty() {
+                    "no devices".into()
+                } else {
+                    String::new()
+                };
+            }
+            DataMsg::Devices(Err(e)) => {
+                self.devices_status = format!("error: {e}");
+            }
+            DataMsg::Routes(Ok(routes)) => {
+                self.routes = routes;
+                self.routes_status = if self.routes.is_empty() {
+                    "no routes".into()
+                } else {
+                    String::new()
+                };
+                self.clamp_selection();
+            }
+            DataMsg::Routes(Err(e)) => {
+                self.routes_status = format!("error: {e}");
+            }
+            DataMsg::Queue(Ok(q)) => {
+                self.queue = q;
+                self.queue_status = if self.queue.is_empty() {
+                    "queue empty".into()
+                } else {
+                    String::new()
+                };
+                self.clamp_selection();
+            }
+            DataMsg::Queue(Err(e)) => {
+                self.queue_status = format!("error: {e}");
+            }
+            DataMsg::DeviceDetail(Ok(d)) => {
+                self.device_detail = Some(d);
+                self.device_status = String::new();
+            }
+            DataMsg::DeviceDetail(Err(e)) => {
+                self.device_status = format!("error: {e}");
+            }
+        }
+    }
+
     pub fn current_len(&self) -> usize {
         match self.tab {
             Tab::Routes => self.routes.len(),
@@ -114,6 +167,16 @@ impl App {
         } else if self.selected >= len {
             self.selected = len - 1;
         }
+    }
+
+    /// Alias for the active dongle, if known from the devices list.
+    pub fn active_alias(&self) -> Option<&str> {
+        let id = self.active_dongle.as_deref()?;
+        self.devices
+            .iter()
+            .find(|d| d.dongle_id == id)
+            .and_then(|d| d.alias.as_deref())
+            .filter(|s| !s.is_empty())
     }
 }
 
@@ -132,10 +195,41 @@ mod tests {
     fn select_on_devices_updates_active() {
         let mut app = App::new(Config::default(), None);
         app.tab = Tab::Devices;
-        app.devices = vec!["aaa".into(), "bbb".into()];
+        app.devices = vec![
+            Device {
+                dongle_id: "aaa".into(),
+                alias: None,
+                serial: None,
+                device_type: None,
+                is_owner: true,
+                is_paired: true,
+                prime: false,
+                prime_type: None,
+                openpilot_version: None,
+                last_gps_lat: None,
+                last_gps_lng: None,
+                last_gps_time: None,
+                extra: serde_json::Value::Null,
+            },
+            Device {
+                dongle_id: "bbb".into(),
+                alias: Some("my car".into()),
+                serial: None,
+                device_type: None,
+                is_owner: true,
+                is_paired: true,
+                prime: false,
+                prime_type: None,
+                openpilot_version: None,
+                last_gps_lat: None,
+                last_gps_lng: None,
+                last_gps_time: None,
+                extra: serde_json::Value::Null,
+            },
+        ];
         app.selected = 1;
         app.on_action(Action::Select);
         assert_eq!(app.active_dongle.as_deref(), Some("bbb"));
-        // Persistence is best-effort to the state file; we only check the in-memory update here.
+        assert_eq!(app.active_alias(), Some("my car"));
     }
 }
