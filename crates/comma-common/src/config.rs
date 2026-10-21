@@ -44,15 +44,15 @@ impl Config {
     pub const APP_NAME: &'static str = "comma";
 
     pub fn load() -> anyhow::Result<Self> {
-        Ok(confy::load(Self::APP_NAME, None)?)
+        Ok(confy::load(Self::APP_NAME, Some("config"))?)
     }
 
     pub fn store(&self) -> anyhow::Result<()> {
-        Ok(confy::store(Self::APP_NAME, None, self)?)
+        Ok(confy::store(Self::APP_NAME, Some("config"), self)?)
     }
 
     pub fn path() -> anyhow::Result<std::path::PathBuf> {
-        Ok(confy::get_configuration_file_path(Self::APP_NAME, None)?)
+        Ok(confy::get_configuration_file_path(Self::APP_NAME, Some("config"))?)
     }
 
     /// Resolve token: CLI flag > env > config.
