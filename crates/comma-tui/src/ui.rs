@@ -48,7 +48,9 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
         .or(app.active_dongle.as_deref())
         .unwrap_or("(none)");
     let indicator = "●";
-    let status_style = if app.active_dongle.is_some() {
+    // Green only when we have confirmed the device is online.
+    // Grey when offline, unknown, or no dongle selected.
+    let status_style = if app.online == Some(true) {
         Style::default().fg(Color::Green)
     } else {
         Style::default().fg(Color::DarkGray)

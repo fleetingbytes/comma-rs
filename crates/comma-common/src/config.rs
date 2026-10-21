@@ -105,8 +105,17 @@ mod tests {
 
     #[test]
     fn missing_token_mentions_useradmin() {
+        // Isolate from any ambient COMMA_TOKEN so the test is deterministic.
+        let previous = std::env::var("COMMA_TOKEN").ok();
+        // Safety: single-threaded test; we restore the previous value immediately after.
+        unsafe { std::env::remove_var("COMMA_TOKEN"); }
         let cfg = Config::default();
-        let err = cfg.resolve_token(None).unwrap_err();
+        let result = cfg.resolve_token(None);
+        // Restore before asserting so a panic doesn't leave the env dirty for other tests.
+        if let Some(prev) = previous {
+            unsafe { std::env::set_var("COMMA_TOKEN", prev); }
+        }
+        let err = result.unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("token"));
         assert!(msg.contains("useradmin.comma.ai"));

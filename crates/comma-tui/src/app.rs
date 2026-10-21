@@ -43,6 +43,8 @@ pub struct App {
     pub selected: usize,
     pub config: Config,
     pub active_dongle: Option<String>,
+    /// None = unknown, Some(true) = online, Some(false) = offline.
+    pub online: Option<bool>,
     pub routes: Vec<Route>,
     pub queue: Vec<UploadQueueItem>,
     pub devices: Vec<Device>,
@@ -63,6 +65,7 @@ impl App {
             selected: 0,
             config,
             active_dongle,
+            online: None,
             routes: Vec::new(),
             queue: Vec::new(),
             devices: Vec::new(),
@@ -131,6 +134,7 @@ impl App {
             }
             DataMsg::Queue(Ok(q)) => {
                 self.queue = q;
+                self.online = Some(true);
                 self.queue_status = if self.queue.is_empty() {
                     "queue empty".into()
                 } else {
@@ -139,7 +143,14 @@ impl App {
                 self.clamp_selection();
             }
             DataMsg::Queue(Err(e)) => {
-                self.queue_status = format!("error: {e}");
+                let msg = e.to_string();
+                if msg.contains("device offline") || msg.contains("not registered") {
+                    self.online = Some(false);
+                    self.queue.clear();
+                    self.queue_status = "device offline".into();
+                } else {
+                    self.queue_status = format!("error: {e}");
+                }
             }
             DataMsg::DeviceDetail(Ok(d)) => {
                 self.device_detail = Some(d);

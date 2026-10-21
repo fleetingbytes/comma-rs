@@ -146,6 +146,15 @@ impl Client {
         let text = resp.text().await?;
 
         if !status.is_success() {
+            // 404 "Device not registered" means the device is offline (powered off).
+            // This is not a real error; treat it as offline.
+            if status.as_u16() == 404 && text.contains("Device not registered") {
+                info!(
+                    dongle_id,
+                    "Athena returned Device not registered; treating as offline (not an error)"
+                );
+                return Err(Error::DeviceOffline);
+            }
             warn!(status = %status, body = %text, "Athena request failed");
             return Err(Error::Api {
                 status: status.as_u16(),

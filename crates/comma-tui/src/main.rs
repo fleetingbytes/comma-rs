@@ -29,8 +29,10 @@ use crate::keys::action_for;
 #[derive(Parser)]
 #[command(name = "comma", version, about = "Terminal UI for comma devices")]
 struct Cli {
-    /// Increase logging verbosity
+    /// Reserved for future use. Live log output is disabled while the TUI runs;
+    /// all logs go to the log file only.
     #[arg(short, long, global = true, action = clap::ArgAction::Count)]
+    #[allow(dead_code)]
     verbose: u8,
 
     /// Override the active dongle ID
@@ -42,14 +44,9 @@ struct Cli {
     token: Option<String>,
 }
 
-fn init_tracing(verbosity: u8) -> Result<std::path::PathBuf> {
-    let level = match verbosity {
-        0 => "warn",
-        1 => "info",
-        2 => "debug",
-        _ => "trace",
-    };
-
+fn init_tracing() -> Result<std::path::PathBuf> {
+    // All TUI logs go to the file only. No live stderr output while the TUI runs
+    // (it would corrupt the alternate screen). The -v flag is currently unused.
     let dir = state_dir();
     fs::create_dir_all(&dir)?;
     let log_path = dir.join("comma-tui.log");
@@ -59,13 +56,6 @@ fn init_tracing(verbosity: u8) -> Result<std::path::PathBuf> {
         .append(true)
         .open(&log_path)?;
 
-    let stderr_layer = tracing_subscriber::fmt::layer()
-        .with_timer(tracing_subscriber::fmt::time::SystemTime)
-        .with_target(false)
-        .compact()
-        .with_writer(std::io::stderr)
-        .with_filter(EnvFilter::new(level));
-
     let file_layer = tracing_subscriber::fmt::layer()
         .with_timer(tracing_subscriber::fmt::time::SystemTime)
         .with_target(true)
@@ -74,17 +64,16 @@ fn init_tracing(verbosity: u8) -> Result<std::path::PathBuf> {
         .with_filter(EnvFilter::new("trace"));
 
     tracing_subscriber::registry()
-        .with(stderr_layer)
         .with(file_layer)
         .init();
 
-    debug!(verbosity, level, log_file = %log_path.display(), "tracing initialized");
+    debug!(log_file = %log_path.display(), "tracing initialized (file only)");
     Ok(log_path)
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let _log_path = init_tracing(cli.verbose)?;
+    let _log_path = init_tracing()?;
 
     let config = Config::load()?;
     let token = config.resolve_token(cli.token.as_deref()).map_err(|e| {
@@ -150,6 +139,7 @@ fn loop_tui(
                 app.routes_status = "loading…".into();
                 app.queue_status = "loading…".into();
                 app.device_status = "loading…".into();
+                app.online = None;
                 app.routes.clear();
                 app.queue.clear();
                 app.device_detail = None;
