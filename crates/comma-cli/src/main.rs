@@ -4,6 +4,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use comma_common::{FileKind, cutoff_secs, missing_route_paths, resolve_route_name};
 use comma_connect_api::Client;
+use comma_common::state_dir;
 use config::Config;
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
@@ -306,18 +307,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn state_dir() -> PathBuf {
-    if let Ok(xdg) = std::env::var("XDG_STATE_HOME")
-        && !xdg.is_empty()
-    {
-        return PathBuf::from(xdg).join("comma-rs");
-    }
-    if let Ok(home) = std::env::var("HOME") {
-        return PathBuf::from(home).join(".local/state/comma-rs");
-    }
-    PathBuf::from(".local/state/comma-rs")
-}
-
 fn init_tracing(verbosity: u8) -> Result<PathBuf> {
     let level = match verbosity {
         0 => "warn",
@@ -369,7 +358,7 @@ fn cmd_config() -> Result<()> {
 
 fn cmd_set_dongle(dongle_id: &str) -> Result<()> {
     let mut cfg = Config::load()?;
-    cfg.default_dongle_id = Some(dongle_id.to_string());
+    cfg.common.default_dongle_id = Some(dongle_id.to_string());
     cfg.store()?;
     info!(dongle_id, path = %Config::path()?.display(), "updated default dongle ID");
     println!("Default dongle ID set to: {}", dongle_id);
@@ -379,7 +368,7 @@ fn cmd_set_dongle(dongle_id: &str) -> Result<()> {
 
 fn cmd_set_token(token: &str) -> Result<()> {
     let mut cfg = Config::load()?;
-    cfg.token = Some(token.to_string());
+    cfg.common.token = Some(token.to_string());
     cfg.store()?;
     info!(path = %Config::path()?.display(), "updated token");
     println!("Token stored in config.");
@@ -389,7 +378,7 @@ fn cmd_set_token(token: &str) -> Result<()> {
 
 async fn cmd_me() -> Result<()> {
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
+    let token = cfg.resolve_token(None)?;
     info!("fetching user profile");
     let client = Client::new(token);
     let profile = client.get_me().await?;
@@ -399,7 +388,7 @@ async fn cmd_me() -> Result<()> {
 
 async fn cmd_devices() -> Result<()> {
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
+    let token = cfg.resolve_token(None)?;
     info!("fetching device list");
     let client = Client::new(token);
     let devices = client.get_devices().await?;
@@ -409,10 +398,8 @@ async fn cmd_devices() -> Result<()> {
 
 async fn cmd_device(dongle_id: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
-    let id = dongle_id
-        .or(cfg.resolve_dongle())
-        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `config set dongle`, set COMMA_DONGLE, or pass one."))?;
+    let token = cfg.resolve_token(None)?;
+    let id = resolve_dongle(&cfg, dongle_id)?;
     info!(dongle_id = %id, "fetching device info");
     let client = Client::new(token);
     let device = client.get_device(&id).await?;
@@ -422,10 +409,8 @@ async fn cmd_device(dongle_id: Option<String>) -> Result<()> {
 
 async fn cmd_routes(dongle_id: Option<String>, limit: u32) -> Result<()> {
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
-    let id = dongle_id
-        .or(cfg.resolve_dongle())
-        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `config set dongle`, set COMMA_DONGLE, or pass one."))?;
+    let token = cfg.resolve_token(None)?;
+    let id = resolve_dongle(&cfg, dongle_id)?;
     info!(dongle_id = %id, limit, "fetching uploaded routes");
     let client = Client::new(token);
     let routes = client.get_routes(&id, Some(limit), None).await?;
@@ -436,8 +421,8 @@ async fn cmd_routes(dongle_id: Option<String>, limit: u32) -> Result<()> {
 /// Resolve a route name that may be either full (`dongle|ts`) or short (`ts`).
 async fn cmd_route_files(name: String, dongle: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
-    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.resolve_dongle().as_deref())?;
+    let token = cfg.resolve_token(None)?;
+    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.default_dongle().as_deref())?;
     info!(route_name = %route_name, "fetching route files");
     let client = Client::new(token);
     let files = client.get_route_files(&route_name).await?;
@@ -446,14 +431,21 @@ async fn cmd_route_files(name: String, dongle: Option<String>) -> Result<()> {
 }
 
 fn resolve_dongle(cfg: &Config, dongle_id: Option<String>) -> Result<String> {
-    dongle_id
-        .or(cfg.resolve_dongle())
+    if let Some(id) = dongle_id.filter(|s| !s.is_empty()) {
+        return Ok(id);
+    }
+    if let Ok(id) = std::env::var("COMMA_DONGLE")
+        && !id.is_empty()
+    {
+        return Ok(id);
+    }
+    cfg.default_dongle()
         .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `config set dongle`, set COMMA_DONGLE, or pass one."))
 }
 
 async fn cmd_upload_queue_list(dongle_id: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
+    let token = cfg.resolve_token(None)?;
     let id = resolve_dongle(&cfg, dongle_id)?;
     info!(dongle_id = %id, "fetching upload queue via Athena");
     let client = Client::new(token);
@@ -468,7 +460,7 @@ async fn cmd_upload_queue_list(dongle_id: Option<String>) -> Result<()> {
 
 async fn cmd_upload_queue_cancel_id(item_id: String, dongle_id: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
+    let token = cfg.resolve_token(None)?;
     let id = resolve_dongle(&cfg, dongle_id)?;
     info!(dongle_id = %id, item_id = %item_id, "cancelling upload");
     let client = Client::new(token);
@@ -481,7 +473,7 @@ async fn cmd_upload_queue_cancel_id(item_id: String, dongle_id: Option<String>) 
 
 async fn cmd_upload_queue_cancel_pending(dongle_id: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
+    let token = cfg.resolve_token(None)?;
     let id = resolve_dongle(&cfg, dongle_id)?;
     info!(dongle_id = %id, "cancelling all pending uploads");
     let client = Client::new(token);
@@ -503,8 +495,8 @@ async fn cmd_upload_files(
     use comma_connect_api::UploadFileRequest;
 
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
-    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.resolve_dongle().as_deref())?;
+    let token = cfg.resolve_token(None)?;
+    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.default_dongle().as_deref())?;
     let dongle_id = route_name
         .split('|')
         .next()
@@ -599,8 +591,8 @@ async fn cmd_upload_route(name: String, dongle: Option<String>, limit: Option<u3
     use comma_connect_api::UploadFileRequest;
 
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
-    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.resolve_dongle().as_deref())?;
+    let token = cfg.resolve_token(None)?;
+    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.default_dongle().as_deref())?;
     let dongle_id = route_name
         .split('|')
         .next()
@@ -699,10 +691,8 @@ async fn cmd_upload_recent_routes(
     max_days: u32,
 ) -> Result<()> {
     let cfg = Config::load()?;
-    let token = cfg.resolve_token()?;
-    let id = dongle_id
-        .or(cfg.resolve_dongle())
-        .ok_or_else(|| anyhow::anyhow!("No dongle ID provided and no default set. Use `config set dongle`, set COMMA_DONGLE, or pass one."))?;
+    let token = cfg.resolve_token(None)?;
+    let id = resolve_dongle(&cfg, dongle_id)?;
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

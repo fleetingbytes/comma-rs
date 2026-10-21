@@ -12,10 +12,12 @@ which dongle’s data is shown in the other tabs.
 - Exactly one dongle is active at a time.
 - Other tabs (Routes, Queue, Device, …) always operate on the active dongle.
 - On startup the active dongle is chosen by: CLI `--dongle`/`-d` >
-  `COMMA_DONGLE` env > last-selected dongle stored in the TUI config >
-  first available (or prompt).
+  `COMMA_DONGLE` env > last-used dongle stored in the state directory >
+  `common.default_dongle_id` from the shared config.
+- If no dongle can be resolved, the TUI starts on the Devices tab.
 - Changing the selection in the Devices tab updates the active dongle for the
-  rest of the session **and** persists the choice to the TUI config.
+  rest of the session **and** persists the choice to the state file
+  `tui-last-used-device-id`.
 - Users can temporarily ignore the persisted or environment value with
   `env -u COMMA_DONGLE comma` or by passing `--dongle`.
 

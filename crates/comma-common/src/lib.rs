@@ -3,6 +3,12 @@
 //! Pure logic that does not depend on a particular UI or CLI framework
 //! belongs here so the two front-ends stay consistent.
 
+mod config;
+mod state;
+
+pub use config::{CommonConfig, Config, TuiSection};
+pub use state::{load_last_dongle, resolve_tui_dongle, state_dir, store_last_dongle};
+
 use anyhow::Result;
 use comma_connect_api::RouteFiles;
 

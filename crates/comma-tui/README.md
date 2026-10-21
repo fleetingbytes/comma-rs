@@ -6,7 +6,7 @@ The binary is named `comma` for convenience.
 
 ## Status
 
-Early implementation. Tabbed shell, fixed source-defined keybindings, config + env + CLI overrides, and placeholder data views are in place. Real API integration and richer tab content come next.
+Early implementation. Tabbed shell (space-saving layout), fixed source-defined keybindings, shared config + env + CLI overrides, last-used dongle in state directory, logging, and placeholder data views are in place. Real API integration and richer tab content come next.
 
 See `docs/` for design notes and decisions.
 
@@ -15,7 +15,7 @@ See `docs/` for design notes and decisions.
 - Text-only (no video, no thumbnails, no graphics protocols).
 - Tabbed main screen inspired by rustnet.
 - Fixed, source-defined keybindings (Vim-like, modifiers and multi-key support).
-- Separate config from `comma-cli` (TOML via confy), but respects the same environment variables (`COMMA_TOKEN`, `COMMA_DONGLE`).
+- Shared config with `comma-cli` (TOML via confy, app name `comma`). Respects the same environment variables (`COMMA_TOKEN`, `COMMA_DONGLE`). Last-used dongle is stored in the state directory.
 - CLI flags override both.
 - Dongle switcher + routes + upload queue as the first useful views.
 - Shared helpers live in the `comma-common` crate.

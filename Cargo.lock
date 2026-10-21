@@ -244,6 +244,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "comma-connect-api",
+ "confy",
  "serde",
 ]
 

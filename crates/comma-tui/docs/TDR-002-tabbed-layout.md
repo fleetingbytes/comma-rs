@@ -10,9 +10,12 @@ rustnet.
 
 The main screen is tabbed:
 
-- Top bar lists tabs and highlights the active one.
-- Bottom bar shows currently relevant keybindings (ranked subset, limited by
-  terminal width; generated from the source-defined binding table).
+- Top bar: left-aligned tabs (active highlighted), right-aligned device
+  status indicator + alias/ID. No surrounding frame.
+- Content area has no frame; it starts immediately under the separator line.
+- Bottom bar: left-aligned ranked, context-sensitive hints that fit in the
+  remaining width; right-aligned always-present `? help  q quit`.
+  Generated from the source-defined binding table.
 - Rightmost tab is always Help and lists all bindings (including alternatives
   and modifiers) generated from the same source table.
 

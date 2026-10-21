@@ -1,7 +1,7 @@
 //! comma — terminal UI for comma devices.
 //!
-//! Early skeleton: tabbed layout, fixed keybindings, config + env + CLI
-//! overrides, placeholder data views, Help tab.
+//! Early skeleton: tabbed layout, fixed keybindings, shared config + env + CLI
+//! overrides, last-used dongle in state, placeholder data views, Help tab.
 
 mod app;
 mod config;
@@ -16,12 +16,15 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
+use std::fs::{self, OpenOptions};
 use std::io;
-use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing::{debug, info};
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::app::App;
-use crate::config::TuiConfig;
+use crate::config::Config;
 use crate::keys::action_for;
+use comma_common::state_dir;
 
 #[derive(Parser)]
 #[command(name = "comma", version, about = "Terminal UI for comma devices")]
@@ -39,24 +42,59 @@ struct Cli {
     token: Option<String>,
 }
 
-fn main() -> Result<()> {
-    let cli = Cli::parse();
-
-    let filter = match cli.verbose {
+fn init_tracing(verbosity: u8) -> Result<std::path::PathBuf> {
+    let level = match verbosity {
         0 => "warn",
         1 => "info",
         2 => "debug",
         _ => "trace",
     };
+
+    let dir = state_dir();
+    fs::create_dir_all(&dir)?;
+    let log_path = dir.join("comma-tui.log");
+
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)?;
+
+    let stderr_layer = tracing_subscriber::fmt::layer()
+        .with_timer(tracing_subscriber::fmt::time::SystemTime)
+        .with_target(false)
+        .compact()
+        .with_writer(std::io::stderr)
+        .with_filter(EnvFilter::new(level));
+
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_timer(tracing_subscriber::fmt::time::SystemTime)
+        .with_target(true)
+        .with_ansi(false)
+        .with_writer(file)
+        .with_filter(EnvFilter::new("trace"));
+
     tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)))
-        .with(tracing_subscriber::fmt::layer().with_target(false))
+        .with(stderr_layer)
+        .with(file_layer)
         .init();
 
-    let config = TuiConfig::load()?;
-    // Resolve token early so we fail fast if missing (for now; later we can allow offline help).
-    let _token = config.resolve_token(cli.token.as_deref())?;
+    debug!(verbosity, level, log_file = %log_path.display(), "tracing initialized");
+    Ok(log_path)
+}
 
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let _log_path = init_tracing(cli.verbose)?;
+
+    let config = Config::load()?;
+    // Fail early if no token is available. Later we will also validate it by listing devices.
+    let _token = config.resolve_token(cli.token.as_deref()).map_err(|e| {
+        // Ensure the helpful message reaches stderr before the TUI starts.
+        eprintln!("{e}");
+        e
+    })?;
+
+    info!("starting comma TUI");
     let mut app = App::new(config, cli.dongle.as_deref());
 
     // Placeholder data (real API calls will replace these).

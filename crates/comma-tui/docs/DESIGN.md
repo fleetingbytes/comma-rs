@@ -15,29 +15,27 @@ Related: see the individual notes in this directory.
 - **Fixed, source-defined keybindings.** Keybindings are not user-configurable.
   They live in one place in the source code (with associated display strings).
   Defaults are Vim-like, with support for modifiers and multiple keys per action.
-- **Separate but compatible config.** The TUI has its own config file (TOML via
-  confy, same strategy as `comma-cli`). Dongle ID and token can live there, but
-  environment variables (`COMMA_TOKEN`, `COMMA_DONGLE`) are preferred and shared
-  with `comma-cli`. CLI flags override both.
+- **Shared config, state for last-used dongle.** CLI and TUI share one config
+  file (TOML via confy, app name `comma`, typically `~/.config/comma/config.toml`).
+  The `[common]` table holds the default dongle ID and token. Environment
+  variables (`COMMA_TOKEN`, `COMMA_DONGLE`) take precedence; CLI flags override
+  both. Last-used dongle is stored in the state directory, not in config.
 
 ## Main screen layout (inspired by rustnet)
 
 ```
-┌───────────────────────────────────────────────────────┐
-│  Routes   Queue   Device    Devices   Help            │  ← tab bar
-├───────────────────────────────────────────────────────┤
-│                                                       │
-│  (active tab content)                                 │
-│                                                       │
-│                                                       │
-├───────────────────────────────────────────────────────┤
-│  j/k: move   space: select   q: quit   ? : help       │  ← status / key hints
-└───────────────────────────────────────────────────────┘
+ Routes | Queue | Device | Devices | Help                 ● my-device
+──────────────────────────────────────────────────────────────────────
+ (active tab content — no frame)
+
+ j/k move   space select                          ? help  q quit
 ```
 
-- Top line: list of tabs, active tab highlighted.
-- Bottom line: context-sensitive keyboard shortcuts currently available
-  (subset of bindings, ranked by importance, limited by terminal width).
+- Top line: left-aligned tabs (active highlighted), right-aligned device
+  status (`●` green if online, grey if offline) plus alias or dongle ID.
+- Separator line under the tabs; content starts immediately below it (no frame).
+- Bottom line: left-aligned ranked, context-sensitive hints that fit in the
+  remaining width; right-aligned always-present `? help  q quit`.
 - Rightmost tab is always **Help**, which lists all keybindings (including
   alternatives and modifiers) generated from the source-defined binding table.
 
@@ -66,15 +64,19 @@ Related: see the individual notes in this directory.
 Own config file managed by `confy` (TOML, platform-standard location, same
 strategy as `comma-cli`; typically `~/.config/comma-tui/config.toml` on Linux).
 
-Example sketch:
+Example sketch (`~/.config/comma/config.toml`):
 
 ```toml
-default_dongle = "0123456789abcdef"
+[common]
+default_dongle_id = "0123456789abcdef"
 # token = "..."   # prefer env var
-last_dongle = "0123456789abcdef"   # written by the TUI on dongle switch
+
+[tui]
+# TUI-specific settings (future)
 ```
 
-Keybindings are **not** in the config; they are defined in source code.
+Last-used dongle lives in the state directory (`~/.local/state/comma/tui-last-used-device-id`),
+not in the config. Keybindings are **not** in the config; they are defined in source code.
 
 ## Keybindings
 
@@ -113,12 +115,12 @@ routes/recent-routes, device alias changes, etc.).
 
 ## Resolved questions
 
-- **Config format and location:** TOML via `confy`, same strategy as
-  `comma-cli`.
+- **Config format and location:** Shared TOML via `confy` (app name `comma`).
+  Last-used dongle is state, not config.
 - **Bottom bar:** Fully dynamic and context-sensitive. Number of shown hints
   depends on terminal width and an importance ranking of the bindings.
 - **Upload-request workflow:** Offer more or less the same features in CLI
   and TUI. Extract shared helpers from the CLI.
-- **Persistence of last-selected dongle:** Written to the TUI config.
-  Overridden by environment variable or CLI flag. Temporary override via
-  `env -u COMMA_DONGLE comma`.
+- **Persistence of last-selected dongle:** Written to the state directory
+  (`tui-last-used-device-id`). Overridden by environment variable or CLI flag.
+  Temporary override via `env -u COMMA_DONGLE comma`.

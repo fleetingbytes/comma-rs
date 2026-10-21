@@ -1,6 +1,6 @@
 //! Application state for the comma TUI.
 
-use crate::config::TuiConfig;
+use crate::config::{resolve_active_dongle, store_last_dongle, Config};
 use crate::keys::Action;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,10 +36,11 @@ impl Tab {
     }
 }
 
+#[allow(dead_code)]
 pub struct App {
     pub tab: Tab,
     pub selected: usize,
-    pub config: TuiConfig,
+    pub config: Config,
     pub active_dongle: Option<String>,
     /// Placeholder content per tab (real data will replace this).
     pub routes: Vec<String>,
@@ -50,10 +51,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(config: TuiConfig, cli_dongle: Option<&str>) -> Self {
-        let active_dongle = config.resolve_dongle(cli_dongle);
+    pub fn new(config: Config, cli_dongle: Option<&str>) -> Self {
+        let active_dongle = resolve_active_dongle(&config, cli_dongle);
+        // If no dongle resolved, start on the Devices tab so the user can pick one.
+        let tab = if active_dongle.is_none() { Tab::Devices } else { Tab::Routes };
         Self {
-            tab: Tab::Routes,
+            tab,
             selected: 0,
             config,
             active_dongle,
@@ -82,9 +85,10 @@ impl App {
             Action::Select => {
                 if self.tab == Tab::Devices {
                     if let Some(d) = self.devices.get(self.selected).cloned() {
-                        self.active_dongle = Some(d.clone());
-                        self.config.last_dongle = Some(d);
-                        let _ = self.config.store(); // best-effort persist
+                        // Extract the bare dongle ID (first token) if the list shows extra info.
+                        let id = d.split_whitespace().next().unwrap_or(&d).to_string();
+                        self.active_dongle = Some(id.clone());
+                        let _ = store_last_dongle(&id); // best-effort persist to state file
                     }
                 }
             }
@@ -126,12 +130,12 @@ mod tests {
 
     #[test]
     fn select_on_devices_updates_active() {
-        let mut app = App::new(TuiConfig::default(), None);
+        let mut app = App::new(Config::default(), None);
         app.tab = Tab::Devices;
         app.devices = vec!["aaa".into(), "bbb".into()];
         app.selected = 1;
         app.on_action(Action::Select);
         assert_eq!(app.active_dongle.as_deref(), Some("bbb"));
-        assert_eq!(app.config.last_dongle.as_deref(), Some("bbb"));
+        // Persistence is best-effort to the state file; we only check the in-memory update here.
     }
 }
