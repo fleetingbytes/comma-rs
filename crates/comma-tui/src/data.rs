@@ -103,8 +103,6 @@ impl Loader {
         self.load_queue(dongle_id.to_string());
         self.load_device_detail(dongle_id.to_string());
     }
-}
-
 
     /// Request upload of one file kind for a single route (missing segments only).
     pub fn request_upload_kind(&self, dongle_id: String, route_name: String, kind: FileKind) {
