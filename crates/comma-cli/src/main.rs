@@ -96,7 +96,7 @@ enum RouteCommands {
 
     /// List uploaded files for a route (signed URLs; presence indicates upload status)
     Files {
-        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        /// Route name: full form `dongle|log_id` or just the log id part
         /// (e.g. `44379c05b64fd7e3|00000144--e88a1a5266` or `00000144--e88a1a5266`)
         name: String,
 
@@ -117,7 +117,7 @@ enum UploadCommands {
 
     /// Request upload of road camera files (fcamera.hevc) for a route
     RoadCamera {
-        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        /// Route name: full form `dongle|log_id` or just the log id part
         name: String,
 
         /// Dongle ID (required only when `name` does not already contain the dongle)
@@ -131,7 +131,7 @@ enum UploadCommands {
 
     /// Request upload of wide road camera files (ecamera.hevc) for a route
     WideRoadCamera {
-        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        /// Route name: full form `dongle|log_id` or just the log id part
         name: String,
 
         /// Dongle ID (required only when `name` does not already contain the dongle)
@@ -145,7 +145,7 @@ enum UploadCommands {
 
     /// Request upload of driver camera files (dcamera.hevc) for a route
     DriverCamera {
-        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        /// Route name: full form `dongle|log_id` or just the log id part
         name: String,
 
         /// Dongle ID (required only when `name` does not already contain the dongle)
@@ -159,7 +159,7 @@ enum UploadCommands {
 
     /// Request upload of full log files (rlog.zst) for a route
     Log {
-        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        /// Route name: full form `dongle|log_id` or just the log id part
         name: String,
 
         /// Dongle ID (required only when `name` does not already contain the dongle)
@@ -174,7 +174,7 @@ enum UploadCommands {
     /// Request upload of all file kinds for a route (road, driver, wide road, log),
     /// zipped by segment. Already-uploaded kinds of a segment are skipped.
     Route {
-        /// Route name: full form `dongle|timestamp` or just the timestamp part
+        /// Route name: full form `dongle|log_id` or just the log id part
         name: String,
 
         /// Dongle ID (required only when `name` does not already contain the dongle)
@@ -422,7 +422,9 @@ async fn cmd_routes(dongle_id: Option<String>, limit: u32) -> Result<()> {
 async fn cmd_route_files(name: String, dongle: Option<String>) -> Result<()> {
     let cfg = Config::load()?;
     let token = cfg.resolve_token(None)?;
-    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.default_dongle().as_deref())?;
+    let env_dongle = std::env::var("COMMA_DONGLE").ok().filter(|s| !s.is_empty());
+    let effective_dongle = dongle.as_deref().or(env_dongle.as_deref());
+    let route_name = resolve_route_name(&name, effective_dongle, cfg.default_dongle().as_deref())?;
     info!(route_name = %route_name, "fetching route files");
     let client = Client::new(token);
     let files = client.get_route_files(&route_name).await?;
@@ -496,7 +498,9 @@ async fn cmd_upload_files(
 
     let cfg = Config::load()?;
     let token = cfg.resolve_token(None)?;
-    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.default_dongle().as_deref())?;
+    let env_dongle = std::env::var("COMMA_DONGLE").ok().filter(|s| !s.is_empty());
+    let effective_dongle = dongle.as_deref().or(env_dongle.as_deref());
+    let route_name = resolve_route_name(&name, effective_dongle, cfg.default_dongle().as_deref())?;
     let dongle_id = route_name
         .split('|')
         .next()
@@ -505,7 +509,7 @@ async fn cmd_upload_files(
     let route_ts = route_name
         .split('|')
         .nth(1)
-        .ok_or_else(|| anyhow::anyhow!("route name missing timestamp part"))?
+        .ok_or_else(|| anyhow::anyhow!("route name missing log id part"))?
         .to_string();
 
     info!(route_name = %route_name, kind = kind.display(), "requesting upload");
@@ -592,7 +596,9 @@ async fn cmd_upload_route(name: String, dongle: Option<String>, limit: Option<u3
 
     let cfg = Config::load()?;
     let token = cfg.resolve_token(None)?;
-    let route_name = resolve_route_name(&name, dongle.as_deref(), cfg.default_dongle().as_deref())?;
+    let env_dongle = std::env::var("COMMA_DONGLE").ok().filter(|s| !s.is_empty());
+    let effective_dongle = dongle.as_deref().or(env_dongle.as_deref());
+    let route_name = resolve_route_name(&name, effective_dongle, cfg.default_dongle().as_deref())?;
     let dongle_id = route_name
         .split('|')
         .next()
@@ -601,7 +607,7 @@ async fn cmd_upload_route(name: String, dongle: Option<String>, limit: Option<u3
     let route_ts = route_name
         .split('|')
         .nth(1)
-        .ok_or_else(|| anyhow::anyhow!("route name missing timestamp part"))?
+        .ok_or_else(|| anyhow::anyhow!("route name missing log id part"))?
         .to_string();
 
     info!(route_name = %route_name, "requesting whole-route upload");

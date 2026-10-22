@@ -4,13 +4,14 @@
 //! so the UI loop stays responsive.
 
 use anyhow::Result;
-use comma_connect_api::{Client, Device, Route, UploadQueueItem};
+use comma_connect_api::{Client, Device, Route, RouteFiles, UploadQueueItem};
 use std::sync::mpsc::{self, Receiver, Sender};
 use tokio::runtime::Handle;
 
 pub enum DataMsg {
     Devices(Result<Vec<Device>>),
     Routes(Result<Vec<Route>>),
+    RouteFiles(String, Result<RouteFiles>),
     Queue(Result<Vec<UploadQueueItem>>),
     DeviceDetail(Result<Device>),
 }
@@ -43,6 +44,17 @@ impl Loader {
                 .get_routes(&dongle_id, Some(limit), None)
                 .await
                 .map_err(|e| anyhow::anyhow!(e));
+            if let Ok(routes) = &res {
+                for r in routes {
+                    let c = client.clone();
+                    let t = tx.clone();
+                    let name = r.fullname.clone();
+                    tokio::spawn(async move {
+                        let files = c.get_route_files(&name).await.map_err(|e| anyhow::anyhow!(e));
+                        let _ = t.send(DataMsg::RouteFiles(name, files));
+                    });
+                }
+            }
             let _ = tx.send(DataMsg::Routes(res));
         });
     }

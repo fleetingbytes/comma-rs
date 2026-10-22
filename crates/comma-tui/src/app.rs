@@ -3,7 +3,8 @@
 use crate::config::{resolve_active_dongle, store_last_dongle, Config};
 use crate::data::DataMsg;
 use crate::keys::Action;
-use comma_connect_api::{Device, Route, UploadQueueItem};
+use comma_connect_api::{Device, Route, RouteFiles, UploadQueueItem};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -46,6 +47,7 @@ pub struct App {
     /// None = unknown, Some(true) = online, Some(false) = offline.
     pub online: Option<bool>,
     pub routes: Vec<Route>,
+    pub route_files: HashMap<String, RouteFiles>,
     pub queue: Vec<UploadQueueItem>,
     pub devices: Vec<Device>,
     pub device_detail: Option<Device>,
@@ -67,6 +69,7 @@ impl App {
             active_dongle,
             online: None,
             routes: Vec::new(),
+            route_files: HashMap::new(),
             queue: Vec::new(),
             devices: Vec::new(),
             device_detail: None,
@@ -131,6 +134,12 @@ impl App {
             }
             DataMsg::Routes(Err(e)) => {
                 self.routes_status = format!("error: {e}");
+            }
+            DataMsg::RouteFiles(name, Ok(files)) => {
+                self.route_files.insert(name, files);
+            }
+            DataMsg::RouteFiles(_, Err(_)) => {
+                // ignore individual file fetch errors for now
             }
             DataMsg::Queue(Ok(q)) => {
                 self.queue = q;

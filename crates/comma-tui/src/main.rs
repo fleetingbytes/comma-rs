@@ -4,6 +4,7 @@ mod app;
 mod config;
 mod data;
 mod keys;
+mod status;
 mod ui;
 
 use anyhow::Result;

@@ -12,8 +12,8 @@ pub use state::{load_last_dongle, resolve_tui_dongle, state_dir, store_last_dong
 use anyhow::Result;
 use comma_connect_api::RouteFiles;
 
-/// Resolve a route name that may be given as a full `dongle|timestamp` or
-/// as just the timestamp part.
+/// Resolve a route name that may be given as a full `dongle|log_id` or
+/// as just the log id part.
 pub fn resolve_route_name(
     name: &str,
     explicit_dongle: Option<&str>,

@@ -7,6 +7,7 @@
 
 use crate::app::{App, Tab};
 use crate::keys::{displays_for, status_bar_hints, Action};
+use crate::status::{upload_status_symbols, status_spans};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -113,7 +114,17 @@ fn draw_routes(f: &mut Frame, app: &App, area: Rect) {
                 .create_time
                 .map(|t| t.to_string())
                 .unwrap_or_else(|| "-".into());
-            ListItem::new(format!("{}  {}", r.fullname, ct))
+            let status = if let Some(files) = app.route_files.get(&r.fullname) {
+                let segs = r.maxqlog.map(|m| m + 1).unwrap_or(0);
+                let symbols = upload_status_symbols(files, segs);
+                status_spans(&symbols)
+            } else {
+                vec![Span::raw("      ")] // placeholder while loading
+            };
+            let mut line = vec![Span::raw(format!("{}  ", r.fullname))];
+            line.extend(status);
+            line.push(Span::raw(format!("  {}", ct)));
+            ListItem::new(Line::from(line))
         })
         .collect();
     render_list(f, items, app.selected, area);
