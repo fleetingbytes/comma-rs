@@ -17,5 +17,6 @@ anyhow.workspace = true
 confy.workspace = true
 comma-connect-api.workspace = true
 serde.workspace = true
+ron.workspace = true
 
 [dev-dependencies]

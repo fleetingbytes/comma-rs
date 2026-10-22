@@ -93,7 +93,7 @@ fn main() -> Result<()> {
     // Initial loads
     loader.load_devices();
     if let Some(id) = app.active_dongle.clone() {
-        loader.load_for_dongle(&id);
+        loader.load_for_dongle(&id, app.fully_uploaded.clone());
     }
 
     let mut last_dongle = app.active_dongle.clone();
@@ -142,9 +142,10 @@ fn loop_tui(
                 app.device_status = "loading…".into();
                 app.online = None;
                 app.routes.clear();
+                app.route_files.clear();
                 app.queue.clear();
                 app.device_detail = None;
-                loader.load_for_dongle(&id);
+                loader.load_for_dongle(&id, app.fully_uploaded.clone());
             }
         }
 
@@ -155,6 +156,9 @@ fn loop_tui(
                     if let Some(action) = action_for(&key) {
                         app.on_action(action);
                         app.clamp_selection();
+                        if let Some(name) = app.refresh_requested.take() {
+                            loader.load_route_files(name);
+                        }
                     }
                 }
             }

@@ -114,7 +114,20 @@ fn draw_routes(f: &mut Frame, app: &App, area: Rect) {
                 .create_time
                 .map(|t| t.to_string())
                 .unwrap_or_else(|| "-".into());
-            let status = if let Some(files) = app.route_files.get(&r.fullname) {
+            let status = if app.fully_uploaded.contains(&r.fullname) {
+                // Known fully uploaded: show all letters in normal color without a query.
+                let full = [
+                    ('l', Color::DarkGray),
+                    ('c', Color::Yellow),
+                    ('L', Color::Green),
+                    ('F', Color::Cyan),
+                    ('W', Color::Magenta),
+                    ('D', Color::Red),
+                ];
+                full.iter().map(|(ch, color)| {
+                    Span::styled(ch.to_string(), Style::default().fg(*color))
+                }).collect()
+            } else if let Some(files) = app.route_files.get(&r.fullname) {
                 let segs = r.maxqlog.map(|m| m + 1).unwrap_or(0);
                 let symbols = upload_status_symbols(files, segs);
                 status_spans(&symbols)
@@ -221,6 +234,7 @@ fn help_text() -> String {
         Action::Select,
         Action::PageDown,
         Action::PageUp,
+        Action::RefreshUploadStatus,
     ];
     for a in actions {
         let ds = displays_for(a);

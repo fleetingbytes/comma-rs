@@ -20,7 +20,8 @@ pub enum Action {
     Select,
     PageDown,
     PageUp,
-    // Future: Upload, Cancel, etc.
+    /// Refresh upload status of the currently selected route (Routes tab).
+    RefreshUploadStatus,
 }
 
 impl Action {
@@ -35,6 +36,7 @@ impl Action {
             Action::Select => "select / activate",
             Action::PageDown => "page down",
             Action::PageUp => "page up",
+            Action::RefreshUploadStatus => "refresh upload status",
         }
     }
 }
@@ -68,6 +70,7 @@ pub static BINDINGS: &[Binding] = &[
     Binding { action: Action::PageUp, code: KeyCode::Char('b'), modifiers: KeyModifiers::CONTROL, display: "ctrl-b", importance: 20 },
     Binding { action: Action::PageDown, code: KeyCode::PageDown, modifiers: KeyModifiers::NONE, display: "pgdn", importance: 15 },
     Binding { action: Action::PageUp, code: KeyCode::PageUp, modifiers: KeyModifiers::NONE, display: "pgup", importance: 15 },
+    Binding { action: Action::RefreshUploadStatus, code: KeyCode::Char('r'), modifiers: KeyModifiers::CONTROL, display: "ctrl-r", importance: 10 },
 ];
 
 /// Map a key event to an action, if bound.

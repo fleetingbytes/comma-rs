@@ -4,6 +4,7 @@
 //! Last-used device ID for the TUI is stored in a plain file
 //! `tui-last-used-device-id`.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
@@ -37,6 +38,28 @@ pub fn store_last_dongle(dongle_id: &str) -> anyhow::Result<()> {
     fs::create_dir_all(&dir)?;
     let path = dir.join(LAST_DEVICE_FILE);
     fs::write(path, dongle_id)?;
+    Ok(())
+}
+
+
+const FULLY_UPLOADED_FILE: &str = "fully-uploaded-routes.ron";
+
+/// Load the set of route fullnames known to be fully uploaded.
+pub fn load_fully_uploaded() -> HashSet<String> {
+    let path = state_dir().join(FULLY_UPLOADED_FILE);
+    match fs::read_to_string(&path) {
+        Ok(s) => ron::from_str(&s).unwrap_or_default(),
+        Err(_) => HashSet::new(),
+    }
+}
+
+/// Persist the set of fully-uploaded route fullnames.
+pub fn store_fully_uploaded(names: &HashSet<String>) -> anyhow::Result<()> {
+    let dir = state_dir();
+    fs::create_dir_all(&dir)?;
+    let path = dir.join(FULLY_UPLOADED_FILE);
+    let s = ron::ser::to_string_pretty(names, ron::ser::PrettyConfig::default())?;
+    fs::write(path, s)?;
     Ok(())
 }
 

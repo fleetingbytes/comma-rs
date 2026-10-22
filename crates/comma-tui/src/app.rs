@@ -3,8 +3,9 @@
 use crate::config::{resolve_active_dongle, store_last_dongle, Config};
 use crate::data::DataMsg;
 use crate::keys::Action;
+use comma_common::{load_fully_uploaded, store_fully_uploaded};
 use comma_connect_api::{Device, Route, RouteFiles, UploadQueueItem};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -48,6 +49,10 @@ pub struct App {
     pub online: Option<bool>,
     pub routes: Vec<Route>,
     pub route_files: HashMap<String, RouteFiles>,
+    /// Fullnames of routes known to be fully uploaded (persisted).
+    pub fully_uploaded: HashSet<String>,
+    /// When set, the main loop should trigger a fresh files query for this route.
+    pub refresh_requested: Option<String>,
     pub queue: Vec<UploadQueueItem>,
     pub devices: Vec<Device>,
     pub device_detail: Option<Device>,
@@ -70,6 +75,8 @@ impl App {
             online: None,
             routes: Vec::new(),
             route_files: HashMap::new(),
+            fully_uploaded: load_fully_uploaded(),
+            refresh_requested: None,
             queue: Vec::new(),
             devices: Vec::new(),
             device_detail: None,
@@ -107,6 +114,13 @@ impl App {
             }
             Action::PageDown => self.selected = self.selected.saturating_add(10),
             Action::PageUp => self.selected = self.selected.saturating_sub(10),
+            Action::RefreshUploadStatus => {
+                if self.tab == Tab::Routes {
+                    if let Some(r) = self.routes.get(self.selected) {
+                        self.refresh_requested = Some(r.fullname.clone());
+                    }
+                }
+            }
         }
     }
 
@@ -136,6 +150,30 @@ impl App {
                 self.routes_status = format!("error: {e}");
             }
             DataMsg::RouteFiles(name, Ok(files)) => {
+                // Determine if fully uploaded (all kinds >= segment count).
+                // We need the route's maxqlog; look it up.
+                let segs = self.routes.iter()
+                    .find(|r| r.fullname == name)
+                    .and_then(|r| r.maxqlog)
+                    .map(|m| m + 1)
+                    .unwrap_or(0);
+                let fully = segs > 0
+                    && (files.qlogs.len() as i32) >= segs
+                    && (files.qcameras.len() as i32) >= segs
+                    && (files.logs.len() as i32) >= segs
+                    && (files.cameras.len() as i32) >= segs
+                    && (files.ecameras.len() as i32) >= segs
+                    && (files.dcameras.len() as i32) >= segs;
+                if fully {
+                    if self.fully_uploaded.insert(name.clone()) {
+                        let _ = store_fully_uploaded(&self.fully_uploaded);
+                    }
+                } else {
+                    // If it was previously cached as full but is no longer, remove it.
+                    if self.fully_uploaded.remove(&name) {
+                        let _ = store_fully_uploaded(&self.fully_uploaded);
+                    }
+                }
                 self.route_files.insert(name, files);
             }
             DataMsg::RouteFiles(_, Err(_)) => {

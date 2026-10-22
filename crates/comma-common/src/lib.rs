@@ -7,7 +7,7 @@ mod config;
 mod state;
 
 pub use config::{CommonConfig, Config, TuiSection};
-pub use state::{load_last_dongle, resolve_tui_dongle, state_dir, store_last_dongle};
+pub use state::{load_fully_uploaded, load_last_dongle, resolve_tui_dongle, state_dir, store_fully_uploaded, store_last_dongle};
 
 use anyhow::Result;
 use comma_connect_api::RouteFiles;
