@@ -74,8 +74,55 @@ pub static BINDINGS: &[Binding] = &[
 ];
 
 /// Map a key event to an action, if bound.
+///
+/// Matching is intentionally lenient for CONTROL combinations:
+/// - Exact code + modifiers match is preferred.
+/// - If the binding requires CONTROL, we also accept the event when CONTROL
+///   is set (even if other modifiers are present) and the character matches.
+/// - We also accept the raw control character (e.g. Ctrl-r arrives as `\u{12}`
+///   on some terminals) mapped back to the letter.
 pub fn action_for(key: &KeyEvent) -> Option<Action> {
-    BINDINGS.iter().find(|b| b.code == key.code && b.modifiers == key.modifiers).map(|b| b.action)
+    // 1. Exact match
+    if let Some(b) = BINDINGS.iter().find(|b| b.code == key.code && b.modifiers == key.modifiers) {
+        return Some(b.action);
+    }
+
+    // 2. CONTROL + char, ignoring extra modifiers
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        if let KeyCode::Char(c) = key.code {
+            let letter = c.to_ascii_lowercase();
+            if let Some(b) = BINDINGS.iter().find(|b| {
+                b.modifiers.contains(KeyModifiers::CONTROL)
+                    && matches!(b.code, KeyCode::Char(bc) if bc.to_ascii_lowercase() == letter)
+            }) {
+                return Some(b.action);
+            }
+        }
+    }
+
+    // 3. Raw control character (no CONTROL modifier reported)
+    if key.modifiers.is_empty() {
+        if let KeyCode::Char(c) = key.code {
+            // Map common control chars back to their letter
+            let letter = match c as u8 {
+                0x01 => Some('a'), // Ctrl-a
+                0x02 => Some('b'), // Ctrl-b
+                0x06 => Some('f'), // Ctrl-f
+                0x12 => Some('r'), // Ctrl-r
+                _ => None,
+            };
+            if let Some(letter) = letter {
+                if let Some(b) = BINDINGS.iter().find(|b| {
+                    b.modifiers.contains(KeyModifiers::CONTROL)
+                        && matches!(b.code, KeyCode::Char(bc) if bc.to_ascii_lowercase() == letter)
+                }) {
+                    return Some(b.action);
+                }
+            }
+        }
+    }
+
+    None
 }
 
 /// Display strings for an action (may be multiple).
@@ -101,6 +148,18 @@ mod tests {
     }
 
     #[test]
+    fn ctrl_r_refresh() {
+        // Normal CONTROL + 'r'
+        let ev = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL);
+        assert_eq!(action_for(&ev), Some(Action::RefreshUploadStatus));
+        // Extra modifiers should still match
+        let ev = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL | KeyModifiers::SHIFT);
+        assert_eq!(action_for(&ev), Some(Action::RefreshUploadStatus));
+        // Raw control character (some terminals)
+        let ev = KeyEvent::new(KeyCode::Char('\u{12}'), KeyModifiers::NONE);
+        assert_eq!(action_for(&ev), Some(Action::RefreshUploadStatus));
+    }
+
     fn help_is_question() {
         let ev = KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE);
         assert_eq!(action_for(&ev), Some(Action::Help));
