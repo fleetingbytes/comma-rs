@@ -7,6 +7,16 @@ use comma_common::{load_fully_uploaded, store_fully_uploaded};
 use comma_connect_api::{Device, Route, RouteFiles, UploadQueueItem};
 use std::collections::{HashMap, HashSet};
 
+/// A user-requested operation that the main loop should execute.
+#[derive(Debug, Clone)]
+pub enum PendingOp {
+    UploadKind { route: String, kind: comma_common::FileKind },
+    UploadRoute { route: String },
+    UploadAllListed,
+    CancelSelected { id: String },
+    CancelPending,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Routes,
@@ -53,6 +63,8 @@ pub struct App {
     pub fully_uploaded: HashSet<String>,
     /// When set, the main loop should trigger a fresh files query for this route.
     pub refresh_requested: Option<String>,
+    /// When set, the main loop should perform this upload/cancel operation.
+    pub pending_op: Option<PendingOp>,
     pub queue: Vec<UploadQueueItem>,
     pub devices: Vec<Device>,
     pub device_detail: Option<Device>,
@@ -77,6 +89,7 @@ impl App {
             route_files: HashMap::new(),
             fully_uploaded: load_fully_uploaded(),
             refresh_requested: None,
+            pending_op: None,
             queue: Vec::new(),
             devices: Vec::new(),
             device_detail: None,
@@ -120,6 +133,47 @@ impl App {
                         self.refresh_requested = Some(r.fullname.clone());
                     }
                 }
+            }
+            Action::UploadLog => self.request_upload_kind(comma_common::FileKind::Log),
+            Action::UploadFCamera => self.request_upload_kind(comma_common::FileKind::Road),
+            Action::UploadECamera => self.request_upload_kind(comma_common::FileKind::WideRoad),
+            Action::UploadDCamera => self.request_upload_kind(comma_common::FileKind::Driver),
+            Action::UploadRoute => {
+                if self.tab == Tab::Routes {
+                    if let Some(r) = self.routes.get(self.selected) {
+                        self.pending_op = Some(PendingOp::UploadRoute { route: r.fullname.clone() });
+                    }
+                }
+            }
+            Action::UploadAllListed => {
+                if self.tab == Tab::Routes && !self.routes.is_empty() {
+                    self.pending_op = Some(PendingOp::UploadAllListed);
+                }
+            }
+            Action::CancelSelected => {
+                if self.tab == Tab::Queue {
+                    if let Some(item) = self.queue.get(self.selected) {
+                        if let Some(id) = item.id.clone() {
+                            self.pending_op = Some(PendingOp::CancelSelected { id });
+                        }
+                    }
+                }
+            }
+            Action::CancelPending => {
+                if self.tab == Tab::Queue {
+                    self.pending_op = Some(PendingOp::CancelPending);
+                }
+            }
+        }
+    }
+
+    fn request_upload_kind(&mut self, kind: comma_common::FileKind) {
+        if self.tab == Tab::Routes {
+            if let Some(r) = self.routes.get(self.selected) {
+                self.pending_op = Some(PendingOp::UploadKind {
+                    route: r.fullname.clone(),
+                    kind,
+                });
             }
         }
     }

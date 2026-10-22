@@ -169,6 +169,40 @@ fn loop_tui(
                             info!(route = %name, "refresh upload status requested");
                             loader.load_route_files(name);
                         }
+                        if let Some(op) = app.pending_op.take() {
+                            if let Some(dongle) = app.active_dongle.clone() {
+                                use crate::app::PendingOp;
+                                match op {
+                                    PendingOp::UploadKind { route, kind } => {
+                                        info!(route = %route, kind = kind.display(), "requesting kind upload");
+                                        loader.request_upload_kind(dongle.clone(), route, kind);
+                                        loader.load_queue(dongle);
+                                    }
+                                    PendingOp::UploadRoute { route } => {
+                                        info!(route = %route, "requesting whole-route upload");
+                                        loader.request_upload_route(dongle.clone(), route);
+                                        loader.load_queue(dongle);
+                                    }
+                                    PendingOp::UploadAllListed => {
+                                        let names: Vec<_> = app.routes.iter().map(|r| r.fullname.clone()).collect();
+                                        info!(count = names.len(), "requesting upload of all listed routes");
+                                        loader.request_upload_all(dongle.clone(), names);
+                                        loader.load_queue(dongle);
+                                    }
+                                    PendingOp::CancelSelected { id } => {
+                                        info!(item_id = %id, "cancelling selected upload");
+                                        loader.cancel_selected(dongle.clone(), id);
+                                        // Reload queue shortly after
+                                        loader.load_queue(dongle);
+                                    }
+                                    PendingOp::CancelPending => {
+                                        info!("cancelling all pending uploads");
+                                        loader.cancel_pending(dongle.clone());
+                                        loader.load_queue(dongle);
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         debug!("key not bound to any action");
                     }

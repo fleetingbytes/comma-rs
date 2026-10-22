@@ -22,6 +22,22 @@ pub enum Action {
     PageUp,
     /// Refresh upload status of the currently selected route (Routes tab).
     RefreshUploadStatus,
+    /// Request upload of full logs for the selected route.
+    UploadLog,
+    /// Request upload of fcamera (road) for the selected route.
+    UploadFCamera,
+    /// Request upload of ecamera (wide road) for the selected route.
+    UploadECamera,
+    /// Request upload of dcamera (driver) for the selected route.
+    UploadDCamera,
+    /// Request upload of all file kinds for the selected route.
+    UploadRoute,
+    /// Request upload of all file kinds for all currently listed routes.
+    UploadAllListed,
+    /// Cancel the selected upload queue item.
+    CancelSelected,
+    /// Cancel all pending (not currently uploading) queue items.
+    CancelPending,
 }
 
 impl Action {
@@ -37,6 +53,14 @@ impl Action {
             Action::PageDown => "page down",
             Action::PageUp => "page up",
             Action::RefreshUploadStatus => "refresh upload status",
+            Action::UploadLog => "upload log",
+            Action::UploadFCamera => "upload fcamera",
+            Action::UploadECamera => "upload ecamera",
+            Action::UploadDCamera => "upload dcamera",
+            Action::UploadRoute => "upload route",
+            Action::UploadAllListed => "upload all listed",
+            Action::CancelSelected => "cancel selected",
+            Action::CancelPending => "cancel pending",
         }
     }
 }
@@ -54,6 +78,15 @@ pub struct Binding {
 
 /// All bindings, ordered roughly by importance for the status bar.
 pub static BINDINGS: &[Binding] = &[
+    // New high-priority route/queue actions (shown first in the hint bar)
+    Binding { action: Action::UploadLog, code: KeyCode::Char('L'), modifiers: KeyModifiers::SHIFT, display: "L", importance: 99 },
+    Binding { action: Action::UploadFCamera, code: KeyCode::Char('F'), modifiers: KeyModifiers::SHIFT, display: "F", importance: 99 },
+    Binding { action: Action::UploadECamera, code: KeyCode::Char('W'), modifiers: KeyModifiers::SHIFT, display: "W", importance: 99 },
+    Binding { action: Action::UploadDCamera, code: KeyCode::Char('D'), modifiers: KeyModifiers::SHIFT, display: "D", importance: 99 },
+    Binding { action: Action::UploadRoute, code: KeyCode::Char('u'), modifiers: KeyModifiers::NONE, display: "u", importance: 98 },
+    Binding { action: Action::UploadAllListed, code: KeyCode::Char('U'), modifiers: KeyModifiers::SHIFT, display: "U", importance: 98 },
+    Binding { action: Action::CancelSelected, code: KeyCode::Char('c'), modifiers: KeyModifiers::NONE, display: "c", importance: 97 },
+    Binding { action: Action::CancelPending, code: KeyCode::Char('C'), modifiers: KeyModifiers::SHIFT, display: "C", importance: 97 },
     Binding { action: Action::Quit, code: KeyCode::Char('q'), modifiers: KeyModifiers::NONE, display: "q", importance: 100 },
     Binding { action: Action::Help, code: KeyCode::Char('?'), modifiers: KeyModifiers::NONE, display: "?", importance: 90 },
     Binding { action: Action::MoveDown, code: KeyCode::Char('j'), modifiers: KeyModifiers::NONE, display: "j", importance: 80 },
@@ -87,12 +120,12 @@ pub fn action_for(key: &KeyEvent) -> Option<Action> {
         return Some(b.action);
     }
 
-    // 2. CONTROL + char, ignoring extra modifiers
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
+    // 2. CONTROL or SHIFT + char, ignoring extra modifiers
+    if key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::SHIFT) {
         if let KeyCode::Char(c) = key.code {
             let letter = c.to_ascii_lowercase();
             if let Some(b) = BINDINGS.iter().find(|b| {
-                b.modifiers.contains(KeyModifiers::CONTROL)
+                (b.modifiers.contains(KeyModifiers::CONTROL) || b.modifiers.contains(KeyModifiers::SHIFT) || b.modifiers.is_empty())
                     && matches!(b.code, KeyCode::Char(bc) if bc.to_ascii_lowercase() == letter)
             }) {
                 return Some(b.action);

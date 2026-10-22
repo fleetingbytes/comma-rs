@@ -149,20 +149,121 @@ fn draw_queue(f: &mut Frame, app: &App, area: Rect) {
         f.render_widget(para, area);
         return;
     }
-    let items: Vec<ListItem> = app
-        .queue
-        .iter()
-        .map(|q| {
-            let path = q.path.as_deref().unwrap_or("?");
-            let prog = q
-                .progress
-                .map(|p| format!("{:.0}%", p * 100.0))
-                .unwrap_or_else(|| "-".into());
-            let cur = if q.current.unwrap_or(false) { " *" } else { "" };
-            ListItem::new(format!("{path}  {prog}{cur}"))
+    let parsed: Vec<_> = app.queue.iter().map(parse_queue_item).collect();
+    let max_route = parsed.iter().map(|p| p.route.len()).max().unwrap_or(8).max(8);
+    let max_seg = parsed.iter().map(|p| p.segment.len()).max().unwrap_or(3).max(3);
+    let max_kind = parsed.iter().map(|p| p.kind.len()).max().unwrap_or(8).max(8);
+
+    let items: Vec<ListItem> = parsed
+        .into_iter()
+        .map(|p| {
+            let bar = if p.current {
+                progress_bar(p.progress)
+            } else {
+                "pending".to_string()
+            };
+            let line = format!(
+                "{:<10}  {:<width_r$}  {:>width_s$}  {:<width_k$}",
+                bar,
+                p.route,
+                p.segment,
+                p.kind,
+                width_r = max_route,
+                width_s = max_seg,
+                width_k = max_kind,
+            );
+            ListItem::new(line)
         })
         .collect();
     render_list(f, items, app.selected, area);
+}
+
+struct ParsedQueue {
+    route: String,
+    segment: String,
+    kind: String,
+    progress: f64,
+    current: bool,
+}
+
+fn parse_queue_item(q: &comma_connect_api::UploadQueueItem) -> ParsedQueue {
+    let path = q.path.as_deref().unwrap_or("");
+    let (route, segment, kind) = parse_upload_path(path);
+    ParsedQueue {
+        route,
+        segment,
+        kind,
+        progress: q.progress.unwrap_or(0.0),
+        current: q.current.unwrap_or(false),
+    }
+}
+
+/// Parse a queue path/filename into (short route name, segment, log type).
+/// Handles both `logid--seg/filename` and `dongle_logid--seg--filename` forms.
+fn parse_upload_path(path: &str) -> (String, String, String) {
+    // Forms:
+    //   dongle_logid--hash--seg--filename          (issue example)
+    //   logid--hash--seg/filename                  (device path style)
+    //   logid--hash--seg--filename
+    let filename = path.rsplit('/').next().unwrap_or(path);
+    let parent = path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
+
+    // Prefer parsing the parent directory when it looks like logid--seg
+    if !parent.is_empty() && parent.contains("--") {
+        let parent_tail = parent.rsplit(['/', '_']).next().unwrap_or(parent);
+        let parts: Vec<&str> = parent_tail.split("--").collect();
+        if parts.len() >= 2 {
+            if let Some(i) = parts.iter().rposition(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())) {
+                if i >= 1 {
+                    let route = parts[..i].join("--");
+                    let segment = parts[i].to_string();
+                    return (route, segment, log_type_from_filename(filename));
+                }
+            }
+        }
+    }
+
+    // Otherwise parse the filename / whole tail itself
+    let candidate = if filename.contains('_') && filename.contains("--") {
+        filename.rsplit_once('_').map(|(_, rest)| rest).unwrap_or(filename)
+    } else {
+        filename
+    };
+    let parts: Vec<&str> = candidate.split("--").collect();
+    if parts.len() >= 2 {
+        if let Some(i) = parts.iter().position(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())) {
+            if i >= 1 {
+                let route = parts[..i].join("--");
+                let segment = parts[i].to_string();
+                let kind = if i + 1 < parts.len() {
+                    log_type_from_filename(parts[i + 1])
+                } else {
+                    log_type_from_filename(filename)
+                };
+                return (route, segment, kind);
+            }
+        }
+    }
+    ("?".into(), "?".into(), log_type_from_filename(filename))
+}
+
+fn log_type_from_filename(name: &str) -> String {
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("fcamera") { "fcamera".into() }
+    else if lower.contains("ecamera") { "ecamera".into() }
+    else if lower.contains("dcamera") { "dcamera".into() }
+    else if lower.contains("qcamera") { "qcamera".into() }
+    else if lower.contains("qlog") { "qlog".into() }
+    else if lower.contains("rlog") || lower.contains("log") { "log".into() }
+    else { name.split('.').next().unwrap_or(name).to_string() }
+}
+
+fn progress_bar(p: f64) -> String {
+    let p = p.clamp(0.0, 1.0);
+    let width = 8;
+    let filled = (p * width as f64).round() as usize;
+    let empty = width - filled;
+    format!("[{}{}] {:3.0}%", "=".repeat(filled), " ".repeat(empty), p * 100.0)
 }
 
 fn draw_devices(f: &mut Frame, app: &App, area: Rect) {
@@ -235,6 +336,14 @@ fn help_text() -> String {
         Action::PageDown,
         Action::PageUp,
         Action::RefreshUploadStatus,
+        Action::UploadLog,
+        Action::UploadFCamera,
+        Action::UploadECamera,
+        Action::UploadDCamera,
+        Action::UploadRoute,
+        Action::UploadAllListed,
+        Action::CancelSelected,
+        Action::CancelPending,
     ];
     for a in actions {
         let ds = displays_for(a);
@@ -285,4 +394,22 @@ fn draw_status(f: &mut Frame, _app: &App, area: Rect) {
     let style = Style::default().bg(Color::DarkGray).fg(Color::White);
     f.render_widget(Paragraph::new(left).style(style), left_area);
     f.render_widget(Paragraph::new(right).style(style), right_area);
+}
+
+#[cfg(test)]
+mod queue_parse_tests {
+    use super::parse_upload_path;
+
+    #[test]
+    fn parse_upload_path_examples() {
+        let (r, s, k) = parse_upload_path("44379c05b64fd7e3_0000014c--d6e9be51b8--0--fcamera.hevc");
+        assert_eq!(r, "0000014c--d6e9be51b8");
+        assert_eq!(s, "0");
+        assert_eq!(k, "fcamera");
+
+        let (r, s, k) = parse_upload_path("0000014c--d6e9be51b8--6/rlog.zst");
+        assert_eq!(r, "0000014c--d6e9be51b8");
+        assert_eq!(s, "6");
+        assert_eq!(k, "log");
+    }
 }
