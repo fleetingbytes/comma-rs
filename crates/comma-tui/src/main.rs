@@ -152,13 +152,25 @@ fn loop_tui(
         terminal.draw(|f| ui::draw(f, app))?;
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
+                // Always log the raw key event so we can see exactly what the
+                // terminal delivered (helps debug modifier / control-char issues).
+                debug!(
+                    code = ?key.code,
+                    modifiers = ?key.modifiers,
+                    kind = ?key.kind,
+                    "key event"
+                );
                 if key.kind == KeyEventKind::Press {
                     if let Some(action) = action_for(&key) {
+                        debug!(action = ?action, "key mapped to action");
                         app.on_action(action);
                         app.clamp_selection();
                         if let Some(name) = app.refresh_requested.take() {
+                            info!(route = %name, "refresh upload status requested");
                             loader.load_route_files(name);
                         }
+                    } else {
+                        debug!("key not bound to any action");
                     }
                 }
             }
