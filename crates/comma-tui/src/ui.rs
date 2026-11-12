@@ -275,12 +275,10 @@ fn draw_devices(f: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = app
         .devices
         .iter()
-        .enumerate()
-        .map(|(i, d)| {
+        .map(|d| {
             let alias = d.alias.as_deref().unwrap_or("");
             let owner = if d.is_owner { "owned" } else { "shared" };
             let is_active = app.active_dongle.as_deref() == Some(d.dongle_id.as_str());
-            let is_selected = i == app.selected;
 
             let prefix = if is_active { "> " } else { "  " };
             let text = format!("{prefix}{}  {}  ({})", d.dongle_id, alias, owner);
@@ -289,18 +287,16 @@ fn draw_devices(f: &mut Frame, app: &App, area: Rect) {
             if is_active {
                 style = style.add_modifier(Modifier::BOLD);
             }
-            if is_selected {
-                // Cursor highlight: fg/bg change only (no extra bold or symbol beyond the active prefix).
-                style = style.bg(Color::DarkGray).fg(Color::White);
-            }
 
             ListItem::new(Line::from(Span::styled(text, style)))
         })
         .collect();
 
-    // Use List without highlight_symbol so the cursor is indicated solely by style.
-    // Selection is still tracked for navigation, but visual is handled per-item.
-    let list = List::new(items);
+    // Cursor highlight via List highlight_style (full line width).
+    // Active device indicated only by prefix + bold on the item content.
+    let list = List::new(items)
+        .highlight_style(Style::default().bg(Color::DarkGray).fg(Color::White))
+        .highlight_symbol("");
     let mut state = ListState::default().with_selected(Some(app.selected));
     f.render_stateful_widget(list, area, &mut state);
 }
