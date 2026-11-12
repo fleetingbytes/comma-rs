@@ -53,7 +53,6 @@ impl Tab {
 pub struct App {
     pub tab: Tab,
     pub selected: usize,
-    pub config: Config,
     pub active_dongle: Option<String>,
     /// None = unknown, Some(true) = online, Some(false) = offline.
     pub online: Option<bool>,
@@ -82,7 +81,6 @@ impl App {
         Self {
             tab,
             selected: 0,
-            config,
             active_dongle,
             online: None,
             routes: Vec::new(),
