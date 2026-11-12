@@ -275,13 +275,34 @@ fn draw_devices(f: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = app
         .devices
         .iter()
-        .map(|d| {
+        .enumerate()
+        .map(|(i, d)| {
             let alias = d.alias.as_deref().unwrap_or("");
             let owner = if d.is_owner { "owned" } else { "shared" };
-            ListItem::new(format!("{}  {}  ({})", d.dongle_id, alias, owner))
+            let is_active = app.active_dongle.as_deref() == Some(d.dongle_id.as_str());
+            let is_selected = i == app.selected;
+
+            let prefix = if is_active { "> " } else { "  " };
+            let text = format!("{prefix}{}  {}  ({})", d.dongle_id, alias, owner);
+
+            let mut style = Style::default();
+            if is_active {
+                style = style.add_modifier(Modifier::BOLD);
+            }
+            if is_selected {
+                // Cursor highlight: fg/bg change only (no extra bold or symbol beyond the active prefix).
+                style = style.bg(Color::DarkGray).fg(Color::White);
+            }
+
+            ListItem::new(Line::from(Span::styled(text, style)))
         })
         .collect();
-    render_list(f, items, app.selected, area);
+
+    // Use List without highlight_symbol so the cursor is indicated solely by style.
+    // Selection is still tracked for navigation, but visual is handled per-item.
+    let list = List::new(items);
+    let mut state = ListState::default().with_selected(Some(app.selected));
+    f.render_stateful_widget(list, area, &mut state);
 }
 
 fn draw_device(f: &mut Frame, app: &App, area: Rect) {
@@ -357,7 +378,41 @@ fn help_text() -> String {
     lines.join("\n")
 }
 
-fn draw_status(f: &mut Frame, _app: &App, area: Rect) {
+fn is_relevant_for_tab(action: Action, tab: Tab) -> bool {
+    match tab {
+        Tab::Routes => matches!(
+            action,
+            Action::UploadLog
+                | Action::UploadFCamera
+                | Action::UploadECamera
+                | Action::UploadDCamera
+                | Action::UploadRoute
+                | Action::UploadAllListed
+                | Action::RefreshUploadStatus
+                | Action::MoveDown
+                | Action::MoveUp
+                | Action::PageDown
+                | Action::PageUp
+        ),
+        Tab::Queue => matches!(
+            action,
+            Action::CancelSelected
+                | Action::CancelPending
+                | Action::MoveDown
+                | Action::MoveUp
+                | Action::PageDown
+                | Action::PageUp
+        ),
+        Tab::Device => matches!(action, Action::NextTab | Action::PrevTab),
+        Tab::Devices => matches!(
+            action,
+            Action::Select | Action::MoveDown | Action::MoveUp | Action::PageDown | Action::PageUp
+        ),
+        Tab::Help => matches!(action, Action::NextTab | Action::PrevTab),
+    }
+}
+
+fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     let right = "? help  q quit";
     let right_len = right.len() as u16;
     let available = area.width.saturating_sub(right_len + 2);
@@ -366,6 +421,9 @@ fn draw_status(f: &mut Frame, _app: &App, area: Rect) {
     let mut used = 0u16;
     for b in status_bar_hints() {
         if matches!(b.action, Action::Help | Action::Quit) {
+            continue;
+        }
+        if !is_relevant_for_tab(b.action, app.tab) {
             continue;
         }
         let part = format!("{} {}", b.display, b.action.description());
