@@ -128,13 +128,20 @@ impl Loader {
     }
 
     /// Request upload of all missing files for every given route.
+    ///
+    /// Spawns an independent task per route so the requests run concurrently.
+    /// This avoids the previous sequential loop, which was aborted on TUI exit
+    /// (Runtime drop) and therefore only queued the first few routes if the
+    /// user quit before the whole loop finished.
     pub fn request_upload_all(&self, dongle_id: String, routes: Vec<String>) {
         let client = self.client.clone();
-        self.handle.spawn(async move {
-            for name in routes {
-                let _ = do_upload_route(&client, &dongle_id, &name).await;
-            }
-        });
+        for name in routes {
+            let client = client.clone();
+            let dongle = dongle_id.clone();
+            self.handle.spawn(async move {
+                let _ = do_upload_route(&client, &dongle, &name).await;
+            });
+        }
     }
 
     /// Cancel one queue item by id.
