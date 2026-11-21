@@ -162,17 +162,28 @@ impl Loader {
     }
 
     /// Cancel one queue item by id.
+    ///
+    /// Tracked in `inflight_uploads` so graceful quit waits for the Athena call.
     pub fn cancel_selected(&self, dongle_id: String, item_id: String) {
         let client = self.client.clone();
+        let inflight = self.inflight_uploads.clone();
+        inflight.fetch_add(1, Ordering::Relaxed);
         self.handle.spawn(async move {
+            let _guard = InflightGuard(inflight);
             let _ = client.cancel_upload(&dongle_id, std::slice::from_ref(&item_id)).await;
         });
     }
 
     /// Cancel all pending (non-current) uploads.
+    ///
+    /// Tracked in `inflight_uploads` so graceful quit waits for the
+    /// listUploadQueue + cancelUpload Athena round-trips.
     pub fn cancel_pending(&self, dongle_id: String) {
         let client = self.client.clone();
+        let inflight = self.inflight_uploads.clone();
+        inflight.fetch_add(1, Ordering::Relaxed);
         self.handle.spawn(async move {
+            let _guard = InflightGuard(inflight);
             let _ = client.cancel_pending_uploads(&dongle_id).await;
         });
     }
