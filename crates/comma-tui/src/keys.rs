@@ -12,6 +12,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Action {
     Quit,
+    /// Exit immediately, aborting any in-flight Athena uploads.
+    ForceQuit,
     Help,
     NextTab,
     PrevTab,
@@ -43,7 +45,8 @@ pub enum Action {
 impl Action {
     pub fn description(self) -> &'static str {
         match self {
-            Action::Quit => "quit",
+            Action::Quit => "quit (after uploads)",
+            Action::ForceQuit => "force quit",
             Action::Help => "show help",
             Action::NextTab => "next tab",
             Action::PrevTab => "previous tab",
@@ -88,6 +91,7 @@ pub static BINDINGS: &[Binding] = &[
     Binding { action: Action::CancelSelected, code: KeyCode::Char('c'), modifiers: KeyModifiers::NONE, display: "c", importance: 97 },
     Binding { action: Action::CancelPending, code: KeyCode::Char('C'), modifiers: KeyModifiers::SHIFT, display: "C", importance: 97 },
     Binding { action: Action::Quit, code: KeyCode::Char('q'), modifiers: KeyModifiers::NONE, display: "q", importance: 100 },
+    Binding { action: Action::ForceQuit, code: KeyCode::Char('Q'), modifiers: KeyModifiers::SHIFT, display: "Q", importance: 1 },
     Binding { action: Action::Help, code: KeyCode::Char('?'), modifiers: KeyModifiers::NONE, display: "?", importance: 90 },
     Binding { action: Action::MoveDown, code: KeyCode::Char('j'), modifiers: KeyModifiers::NONE, display: "j", importance: 80 },
     Binding { action: Action::MoveUp, code: KeyCode::Char('k'), modifiers: KeyModifiers::NONE, display: "k", importance: 80 },

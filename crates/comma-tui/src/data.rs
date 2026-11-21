@@ -6,7 +6,8 @@
 use anyhow::Result;
 use comma_common::{FileKind, missing_route_paths};
 use comma_connect_api::{Client, Device, Route, RouteFiles, UploadFileRequest, UploadQueueItem};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, mpsc::{self, Receiver, Sender}};
 use tokio::runtime::Handle;
 
 pub enum DataMsg {
@@ -21,11 +22,23 @@ pub struct Loader {
     client: Client,
     tx: Sender<DataMsg>,
     handle: Handle,
+    /// Number of in-flight multi-step upload tasks (Athena round-trips).
+    inflight_uploads: Arc<AtomicUsize>,
 }
 
 impl Loader {
     pub fn new(client: Client, tx: Sender<DataMsg>, handle: Handle) -> Self {
-        Self { client, tx, handle }
+        Self {
+            client,
+            tx,
+            handle,
+            inflight_uploads: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    /// Number of upload tasks that have not yet finished their Athena calls.
+    pub fn inflight_uploads(&self) -> usize {
+        self.inflight_uploads.load(Ordering::Relaxed)
     }
 
     pub fn load_devices(&self) {
@@ -108,21 +121,23 @@ impl Loader {
     pub fn request_upload_kind(&self, dongle_id: String, route_name: String, kind: FileKind) {
         let client = self.client.clone();
         let tx = self.tx.clone();
+        let inflight = self.inflight_uploads.clone();
+        inflight.fetch_add(1, Ordering::Relaxed);
         self.handle.spawn(async move {
+            let _guard = InflightGuard(inflight);
             let res = do_upload_kind(&client, &dongle_id, &route_name, kind).await;
-            // Reuse Queue message channel? For now just log via a dummy; we will
-            // send a Routes refresh or a dedicated message. Simplest: log and
-            // trigger a queue reload by sending Queue(Err) is wrong.
-            // We'll send nothing special; the caller reloads the queue.
             let _ = res;
-            let _ = tx; // keep tx available if we later add a status message
+            let _ = tx;
         });
     }
 
     /// Request upload of all missing file kinds for one route.
     pub fn request_upload_route(&self, dongle_id: String, route_name: String) {
         let client = self.client.clone();
+        let inflight = self.inflight_uploads.clone();
+        inflight.fetch_add(1, Ordering::Relaxed);
         self.handle.spawn(async move {
+            let _guard = InflightGuard(inflight);
             let _ = do_upload_route(&client, &dongle_id, &route_name).await;
         });
     }
@@ -130,15 +145,17 @@ impl Loader {
     /// Request upload of all missing files for every given route.
     ///
     /// Spawns an independent task per route so the requests run concurrently.
-    /// This avoids the previous sequential loop, which was aborted on TUI exit
-    /// (Runtime drop) and therefore only queued the first few routes if the
-    /// user quit before the whole loop finished.
+    /// Each task is tracked in `inflight_uploads` so graceful quit can wait
+    /// for every Athena round-trip to finish.
     pub fn request_upload_all(&self, dongle_id: String, routes: Vec<String>) {
         let client = self.client.clone();
         for name in routes {
             let client = client.clone();
             let dongle = dongle_id.clone();
+            let inflight = self.inflight_uploads.clone();
+            inflight.fetch_add(1, Ordering::Relaxed);
             self.handle.spawn(async move {
+                let _guard = InflightGuard(inflight);
                 let _ = do_upload_route(&client, &dongle, &name).await;
             });
         }
@@ -220,6 +237,15 @@ async fn do_upload_route(client: &Client, dongle_id: &str, route_name: &str) -> 
     }).collect();
     client.upload_files_to_urls(dongle_id, &requests, None).await.map_err(|e| anyhow::anyhow!(e))?;
     Ok(())
+}
+
+
+/// Decrements the in-flight counter when the upload task ends (success or error).
+struct InflightGuard(Arc<AtomicUsize>);
+impl Drop for InflightGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
+    }
 }
 
 pub fn channel() -> (Sender<DataMsg>, Receiver<DataMsg>) {

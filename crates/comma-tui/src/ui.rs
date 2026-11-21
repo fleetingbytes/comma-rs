@@ -344,6 +344,7 @@ fn help_text() -> String {
     ];
     let actions = [
         Action::Quit,
+        Action::ForceQuit,
         Action::Help,
         Action::NextTab,
         Action::PrevTab,
@@ -370,7 +371,7 @@ fn help_text() -> String {
     }
     lines.push(String::new());
     lines.push("Routes shows the most recent 20 routes (fullname + create_time).".into());
-    lines.push("Press q to quit.".into());
+    lines.push("Press q to quit after in-flight uploads finish; Q force-quits immediately.".into());
     lines.join("\n")
 }
 
@@ -409,7 +410,11 @@ fn is_relevant_for_tab(action: Action, tab: Tab) -> bool {
 }
 
 fn draw_status(f: &mut Frame, app: &App, area: Rect) {
-    let right = "? help  q quit";
+    let right = if app.graceful_quit_requested {
+        "waiting… Q force"
+    } else {
+        "? help  q quit"
+    };
     let right_len = right.len() as u16;
     let available = area.width.saturating_sub(right_len + 2);
 
