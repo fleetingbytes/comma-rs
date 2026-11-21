@@ -209,6 +209,17 @@ fn loop_tui(
                 }
             }
         }
+        // Graceful quit: wait until in-flight Athena uploads finish.
+        if app.graceful_quit_requested && !app.should_quit {
+            let n = loader.inflight_uploads();
+            if n == 0 {
+                info!("graceful quit: no in-flight uploads, exiting");
+                app.should_quit = true;
+            } else {
+                // Status bar already shows the wait; keep the event loop alive.
+                let _ = n;
+            }
+        }
         if app.should_quit {
             break;
         }

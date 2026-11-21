@@ -72,6 +72,8 @@ pub struct App {
     pub devices_status: String,
     pub device_status: String,
     pub should_quit: bool,
+    /// When true, quit only after in-flight Athena uploads finish.
+    pub graceful_quit_requested: bool,
 }
 
 impl App {
@@ -96,12 +98,14 @@ impl App {
             devices_status: "loading…".into(),
             device_status: "loading…".into(),
             should_quit: false,
+            graceful_quit_requested: false,
         }
     }
 
     pub fn on_action(&mut self, action: Action) {
         match action {
-            Action::Quit => self.should_quit = true,
+            Action::Quit => self.graceful_quit_requested = true,
+            Action::ForceQuit => self.should_quit = true,
             Action::Help => self.tab = Tab::Help,
             Action::NextTab => {
                 self.tab = self.tab.next();
