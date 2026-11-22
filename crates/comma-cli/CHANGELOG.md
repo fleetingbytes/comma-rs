@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/fleetingbytes/comma-rs/compare/comma-cli-v0.1.1...comma-cli-v0.1.2) - 2026-11-22
+
+### Fixed
+
+- address remaining clippy lints and bump comma-connect-api to 0.2.0
+
+### Other
+
+- apply cargo fmt to satisfy CI check
+
 ## [0.1.1](https://github.com/fleetingbytes/comma-rs/compare/comma-cli-v0.1.0...comma-cli-v0.1.1) - 2026-10-16
 
 ### Fixed
