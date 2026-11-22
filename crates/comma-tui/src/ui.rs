@@ -231,17 +231,15 @@ fn parse_upload_path(path: &str) -> (String, String, String) {
     if !parent.is_empty() && parent.contains("--") {
         let parent_tail = parent.rsplit(['/', '_']).next().unwrap_or(parent);
         let parts: Vec<&str> = parent_tail.split("--").collect();
-        if parts.len() >= 2 {
-            if let Some(i) = parts
+        if parts.len() >= 2
+            && let Some(i) = parts
                 .iter()
                 .rposition(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
-            {
-                if i >= 1 {
-                    let route = parts[..i].join("--");
-                    let segment = parts[i].to_string();
-                    return (route, segment, log_type_from_filename(filename));
-                }
-            }
+            && i >= 1
+        {
+            let route = parts[..i].join("--");
+            let segment = parts[i].to_string();
+            return (route, segment, log_type_from_filename(filename));
         }
     }
 
@@ -255,22 +253,20 @@ fn parse_upload_path(path: &str) -> (String, String, String) {
         filename
     };
     let parts: Vec<&str> = candidate.split("--").collect();
-    if parts.len() >= 2 {
-        if let Some(i) = parts
+    if parts.len() >= 2
+        && let Some(i) = parts
             .iter()
             .position(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
-        {
-            if i >= 1 {
-                let route = parts[..i].join("--");
-                let segment = parts[i].to_string();
-                let kind = if i + 1 < parts.len() {
-                    log_type_from_filename(parts[i + 1])
-                } else {
-                    log_type_from_filename(filename)
-                };
-                return (route, segment, kind);
-            }
-        }
+        && i >= 1
+    {
+        let route = parts[..i].join("--");
+        let segment = parts[i].to_string();
+        let kind = if i + 1 < parts.len() {
+            log_type_from_filename(parts[i + 1])
+        } else {
+            log_type_from_filename(filename)
+        };
+        return (route, segment, kind);
     }
     ("?".into(), "?".into(), log_type_from_filename(filename))
 }

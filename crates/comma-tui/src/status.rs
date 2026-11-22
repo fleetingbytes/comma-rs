@@ -27,15 +27,7 @@ pub fn upload_status_symbols(files: &RouteFiles, segment_count: i32) -> Vec<Stat
     kinds
         .into_iter()
         .map(|(letter, color, uploaded)| {
-            let dim = if segment_count <= 0 {
-                false
-            } else if (uploaded as i32) >= segment_count {
-                false // full
-            } else if uploaded > 0 {
-                true // partial
-            } else {
-                false // none, will be space
-            };
+            let dim = segment_count > 0 && (uploaded as i32) < segment_count && uploaded > 0; // partial only
             let ch = if uploaded == 0 { ' ' } else { letter };
             StatusSymbol {
                 letter: ch,

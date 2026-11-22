@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/fleetingbytes/comma-rs/compare/comma-connect-api-v0.1.1...comma-connect-api-v0.2.0) - 2026-11-22
+
+### Fixed
+
+- treat Athena 404 "Device not registered" as offline (Error::DeviceOffline)
+
 ## [0.1.1](https://github.com/fleetingbytes/comma-rs/compare/comma-connect-api-v0.1.0...comma-connect-api-v0.1.1) - 2026-10-16
 
 ### Other

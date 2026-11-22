@@ -135,22 +135,22 @@ impl App {
             Action::MoveDown => self.selected = self.selected.saturating_add(1),
             Action::MoveUp => self.selected = self.selected.saturating_sub(1),
             Action::Select => {
-                if self.tab == Tab::Devices {
-                    if let Some(d) = self.devices.get(self.selected) {
-                        let id = d.dongle_id.clone();
-                        self.active_dongle = Some(id.clone());
-                        let _ = store_last_dongle(&id);
-                        // Caller (main loop) will see the change and trigger a reload.
-                    }
+                if self.tab == Tab::Devices
+                    && let Some(d) = self.devices.get(self.selected)
+                {
+                    let id = d.dongle_id.clone();
+                    self.active_dongle = Some(id.clone());
+                    let _ = store_last_dongle(&id);
+                    // Caller (main loop) will see the change and trigger a reload.
                 }
             }
             Action::PageDown => self.selected = self.selected.saturating_add(10),
             Action::PageUp => self.selected = self.selected.saturating_sub(10),
             Action::RefreshUploadStatus => {
-                if self.tab == Tab::Routes {
-                    if let Some(r) = self.routes.get(self.selected) {
-                        self.refresh_requested = Some(r.fullname.clone());
-                    }
+                if self.tab == Tab::Routes
+                    && let Some(r) = self.routes.get(self.selected)
+                {
+                    self.refresh_requested = Some(r.fullname.clone());
                 }
             }
             Action::UploadLog => self.request_upload_kind(comma_common::FileKind::Log),
@@ -158,12 +158,12 @@ impl App {
             Action::UploadECamera => self.request_upload_kind(comma_common::FileKind::WideRoad),
             Action::UploadDCamera => self.request_upload_kind(comma_common::FileKind::Driver),
             Action::UploadRoute => {
-                if self.tab == Tab::Routes {
-                    if let Some(r) = self.routes.get(self.selected) {
-                        self.pending_op = Some(PendingOp::UploadRoute {
-                            route: r.fullname.clone(),
-                        });
-                    }
+                if self.tab == Tab::Routes
+                    && let Some(r) = self.routes.get(self.selected)
+                {
+                    self.pending_op = Some(PendingOp::UploadRoute {
+                        route: r.fullname.clone(),
+                    });
                 }
             }
             Action::UploadAllListed => {
@@ -172,12 +172,11 @@ impl App {
                 }
             }
             Action::CancelSelected => {
-                if self.tab == Tab::Queue {
-                    if let Some(item) = self.queue.get(self.selected) {
-                        if let Some(id) = item.id.clone() {
-                            self.pending_op = Some(PendingOp::CancelSelected { id });
-                        }
-                    }
+                if self.tab == Tab::Queue
+                    && let Some(item) = self.queue.get(self.selected)
+                    && let Some(id) = item.id.clone()
+                {
+                    self.pending_op = Some(PendingOp::CancelSelected { id });
                 }
             }
             Action::CancelPending => {
@@ -189,13 +188,13 @@ impl App {
     }
 
     fn request_upload_kind(&mut self, kind: comma_common::FileKind) {
-        if self.tab == Tab::Routes {
-            if let Some(r) = self.routes.get(self.selected) {
-                self.pending_op = Some(PendingOp::UploadKind {
-                    route: r.fullname.clone(),
-                    kind,
-                });
-            }
+        if self.tab == Tab::Routes
+            && let Some(r) = self.routes.get(self.selected)
+        {
+            self.pending_op = Some(PendingOp::UploadKind {
+                route: r.fullname.clone(),
+                kind,
+            });
         }
     }
 

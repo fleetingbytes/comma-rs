@@ -284,40 +284,40 @@ pub fn action_for(key: &KeyEvent) -> Option<Action> {
     }
 
     // 2. CONTROL or SHIFT + char, ignoring extra modifiers
-    if key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::SHIFT)
+    if (key.modifiers.contains(KeyModifiers::CONTROL)
+        || key.modifiers.contains(KeyModifiers::SHIFT))
+        && let KeyCode::Char(c) = key.code
     {
-        if let KeyCode::Char(c) = key.code {
-            let letter = c.to_ascii_lowercase();
-            if let Some(b) = BINDINGS.iter().find(|b| {
-                (b.modifiers.contains(KeyModifiers::CONTROL)
-                    || b.modifiers.contains(KeyModifiers::SHIFT)
-                    || b.modifiers.is_empty())
-                    && matches!(b.code, KeyCode::Char(bc) if bc.to_ascii_lowercase() == letter)
-            }) {
-                return Some(b.action);
-            }
+        let letter = c.to_ascii_lowercase();
+        if let Some(b) = BINDINGS.iter().find(|b| {
+            (b.modifiers.contains(KeyModifiers::CONTROL)
+                || b.modifiers.contains(KeyModifiers::SHIFT)
+                || b.modifiers.is_empty())
+                && matches!(b.code, KeyCode::Char(bc) if bc.to_ascii_lowercase() == letter)
+        }) {
+            return Some(b.action);
         }
     }
 
     // 3. Raw control character (no CONTROL modifier reported)
-    if key.modifiers.is_empty() {
-        if let KeyCode::Char(c) = key.code {
-            // Map common control chars back to their letter
-            let letter = match c as u8 {
-                0x01 => Some('a'), // Ctrl-a
-                0x02 => Some('b'), // Ctrl-b
-                0x06 => Some('f'), // Ctrl-f
-                0x12 => Some('r'), // Ctrl-r
-                _ => None,
-            };
-            if let Some(letter) = letter {
-                if let Some(b) = BINDINGS.iter().find(|b| {
-                    b.modifiers.contains(KeyModifiers::CONTROL)
-                        && matches!(b.code, KeyCode::Char(bc) if bc.to_ascii_lowercase() == letter)
-                }) {
-                    return Some(b.action);
-                }
-            }
+    if key.modifiers.is_empty()
+        && let KeyCode::Char(c) = key.code
+    {
+        // Map common control chars back to their letter
+        let letter = match c as u8 {
+            0x01 => Some('a'), // Ctrl-a
+            0x02 => Some('b'), // Ctrl-b
+            0x06 => Some('f'), // Ctrl-f
+            0x12 => Some('r'), // Ctrl-r
+            _ => None,
+        };
+        if let Some(letter) = letter
+            && let Some(b) = BINDINGS.iter().find(|b| {
+                b.modifiers.contains(KeyModifiers::CONTROL)
+                    && matches!(b.code, KeyCode::Char(bc) if bc.to_ascii_lowercase() == letter)
+            })
+        {
+            return Some(b.action);
         }
     }
 
@@ -336,7 +336,7 @@ pub fn displays_for(action: Action) -> Vec<&'static str> {
 /// Ranked bindings for the bottom bar (highest importance first).
 pub fn status_bar_hints() -> Vec<&'static Binding> {
     let mut v: Vec<_> = BINDINGS.iter().collect();
-    v.sort_by(|a, b| b.importance.cmp(&a.importance));
+    v.sort_by_key(|a| std::cmp::Reverse(a.importance));
     v
 }
 
@@ -366,6 +366,7 @@ mod tests {
         assert_eq!(action_for(&ev), Some(Action::RefreshUploadStatus));
     }
 
+    #[test]
     fn help_is_question() {
         let ev = KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE);
         assert_eq!(action_for(&ev), Some(Action::Help));

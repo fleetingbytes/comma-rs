@@ -148,66 +148,66 @@ fn loop_tui(
         }
 
         terminal.draw(|f| ui::draw(f, app))?;
-        if event::poll(std::time::Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                // Always log the raw key event so we can see exactly what the
-                // terminal delivered (helps debug modifier / control-char issues).
-                debug!(
-                    code = ?key.code,
-                    modifiers = ?key.modifiers,
-                    kind = ?key.kind,
-                    "key event"
-                );
-                if key.kind == KeyEventKind::Press {
-                    if let Some(action) = action_for(&key) {
-                        debug!(action = ?action, "key mapped to action");
-                        app.on_action(action);
-                        app.clamp_selection();
-                        if let Some(name) = app.refresh_requested.take() {
-                            info!(route = %name, "refresh upload status requested");
-                            loader.load_route_files(name);
-                        }
-                        if let Some(op) = app.pending_op.take() {
-                            if let Some(dongle) = app.active_dongle.clone() {
-                                use crate::app::PendingOp;
-                                match op {
-                                    PendingOp::UploadKind { route, kind } => {
-                                        info!(route = %route, kind = kind.display(), "requesting kind upload");
-                                        loader.request_upload_kind(dongle.clone(), route, kind);
-                                        loader.load_queue(dongle);
-                                    }
-                                    PendingOp::UploadRoute { route } => {
-                                        info!(route = %route, "requesting whole-route upload");
-                                        loader.request_upload_route(dongle.clone(), route);
-                                        loader.load_queue(dongle);
-                                    }
-                                    PendingOp::UploadAllListed => {
-                                        let names: Vec<_> =
-                                            app.routes.iter().map(|r| r.fullname.clone()).collect();
-                                        info!(
-                                            count = names.len(),
-                                            "requesting upload of all listed routes"
-                                        );
-                                        loader.request_upload_all(dongle.clone(), names);
-                                        loader.load_queue(dongle);
-                                    }
-                                    PendingOp::CancelSelected { id } => {
-                                        info!(item_id = %id, "cancelling selected upload");
-                                        loader.cancel_selected(dongle.clone(), id);
-                                        // Reload queue shortly after
-                                        loader.load_queue(dongle);
-                                    }
-                                    PendingOp::CancelPending => {
-                                        info!("cancelling all pending uploads");
-                                        loader.cancel_pending(dongle.clone());
-                                        loader.load_queue(dongle);
-                                    }
-                                }
+        if event::poll(std::time::Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+        {
+            // Always log the raw key event so we can see exactly what the
+            // terminal delivered (helps debug modifier / control-char issues).
+            debug!(
+                code = ?key.code,
+                modifiers = ?key.modifiers,
+                kind = ?key.kind,
+                "key event"
+            );
+            if key.kind == KeyEventKind::Press {
+                if let Some(action) = action_for(&key) {
+                    debug!(action = ?action, "key mapped to action");
+                    app.on_action(action);
+                    app.clamp_selection();
+                    if let Some(name) = app.refresh_requested.take() {
+                        info!(route = %name, "refresh upload status requested");
+                        loader.load_route_files(name);
+                    }
+                    if let Some(op) = app.pending_op.take()
+                        && let Some(dongle) = app.active_dongle.clone()
+                    {
+                        use crate::app::PendingOp;
+                        match op {
+                            PendingOp::UploadKind { route, kind } => {
+                                info!(route = %route, kind = kind.display(), "requesting kind upload");
+                                loader.request_upload_kind(dongle.clone(), route, kind);
+                                loader.load_queue(dongle);
+                            }
+                            PendingOp::UploadRoute { route } => {
+                                info!(route = %route, "requesting whole-route upload");
+                                loader.request_upload_route(dongle.clone(), route);
+                                loader.load_queue(dongle);
+                            }
+                            PendingOp::UploadAllListed => {
+                                let names: Vec<_> =
+                                    app.routes.iter().map(|r| r.fullname.clone()).collect();
+                                info!(
+                                    count = names.len(),
+                                    "requesting upload of all listed routes"
+                                );
+                                loader.request_upload_all(dongle.clone(), names);
+                                loader.load_queue(dongle);
+                            }
+                            PendingOp::CancelSelected { id } => {
+                                info!(item_id = %id, "cancelling selected upload");
+                                loader.cancel_selected(dongle.clone(), id);
+                                // Reload queue shortly after
+                                loader.load_queue(dongle);
+                            }
+                            PendingOp::CancelPending => {
+                                info!("cancelling all pending uploads");
+                                loader.cancel_pending(dongle.clone());
+                                loader.load_queue(dongle);
                             }
                         }
-                    } else {
-                        debug!("key not bound to any action");
                     }
+                } else {
+                    debug!("key not bound to any action");
                 }
             }
         }
