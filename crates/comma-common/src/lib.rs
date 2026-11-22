@@ -61,7 +61,7 @@ impl FileKind {
         }
     }
 
-    pub fn uploaded<'a>(self, files: &'a RouteFiles) -> &'a [String] {
+    pub fn uploaded(self, files: &RouteFiles) -> &[String] {
         match self {
             FileKind::Road => &files.cameras,
             FileKind::WideRoad => &files.ecameras,
