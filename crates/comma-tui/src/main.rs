@@ -64,9 +64,7 @@ fn init_tracing() -> Result<std::path::PathBuf> {
         .with_writer(file)
         .with_filter(EnvFilter::new("trace"));
 
-    tracing_subscriber::registry()
-        .with(file_layer)
-        .init();
+    tracing_subscriber::registry().with(file_layer).init();
 
     debug!(log_file = %log_path.display(), "tracing initialized (file only)");
     Ok(log_path)
@@ -184,8 +182,12 @@ fn loop_tui(
                                         loader.load_queue(dongle);
                                     }
                                     PendingOp::UploadAllListed => {
-                                        let names: Vec<_> = app.routes.iter().map(|r| r.fullname.clone()).collect();
-                                        info!(count = names.len(), "requesting upload of all listed routes");
+                                        let names: Vec<_> =
+                                            app.routes.iter().map(|r| r.fullname.clone()).collect();
+                                        info!(
+                                            count = names.len(),
+                                            "requesting upload of all listed routes"
+                                        );
                                         loader.request_upload_all(dongle.clone(), names);
                                         loader.load_queue(dongle);
                                     }

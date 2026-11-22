@@ -7,7 +7,10 @@ mod config;
 mod state;
 
 pub use config::{CommonConfig, Config, TuiSection};
-pub use state::{load_fully_uploaded, load_last_dongle, resolve_tui_dongle, state_dir, store_fully_uploaded, store_last_dongle};
+pub use state::{
+    load_fully_uploaded, load_last_dongle, resolve_tui_dongle, state_dir, store_fully_uploaded,
+    store_last_dongle,
+};
 
 use anyhow::Result;
 use comma_connect_api::RouteFiles;
@@ -22,9 +25,11 @@ pub fn resolve_route_name(
     if name.contains('|') {
         return Ok(name.to_string());
     }
-    let dongle = explicit_dongle
-        .or(default_dongle)
-        .ok_or_else(|| anyhow::anyhow!("short route name requires a dongle (pass one, set default, or use COMMA_DONGLE)"))?;
+    let dongle = explicit_dongle.or(default_dongle).ok_or_else(|| {
+        anyhow::anyhow!(
+            "short route name requires a dongle (pass one, set default, or use COMMA_DONGLE)"
+        )
+    })?;
     Ok(format!("{dongle}|{name}"))
 }
 

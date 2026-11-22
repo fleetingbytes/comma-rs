@@ -6,8 +6,8 @@
 //! - Bottom bar: left-aligned ranked hints that fit, right-aligned "? help  q quit"
 
 use crate::app::{App, Tab};
-use crate::keys::{displays_for, status_bar_hints, Action};
-use crate::status::{upload_status_symbols, status_spans};
+use crate::keys::{Action, displays_for, status_bar_hints};
+use crate::status::{status_spans, upload_status_symbols};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -73,7 +73,11 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
 
     let tabs = Tabs::new(titles)
         .select(selected)
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
         .divider("|");
     f.render_widget(tabs, tab_area);
 
@@ -124,9 +128,9 @@ fn draw_routes(f: &mut Frame, app: &App, area: Rect) {
                     ('W', Color::Magenta),
                     ('D', Color::Red),
                 ];
-                full.iter().map(|(ch, color)| {
-                    Span::styled(ch.to_string(), Style::default().fg(*color))
-                }).collect()
+                full.iter()
+                    .map(|(ch, color)| Span::styled(ch.to_string(), Style::default().fg(*color)))
+                    .collect()
             } else if let Some(files) = app.route_files.get(&r.fullname) {
                 let segs = r.maxqlog.map(|m| m + 1).unwrap_or(0);
                 let symbols = upload_status_symbols(files, segs);
@@ -150,9 +154,24 @@ fn draw_queue(f: &mut Frame, app: &App, area: Rect) {
         return;
     }
     let parsed: Vec<_> = app.queue.iter().map(parse_queue_item).collect();
-    let max_route = parsed.iter().map(|p| p.route.len()).max().unwrap_or(8).max(8);
-    let max_seg = parsed.iter().map(|p| p.segment.len()).max().unwrap_or(3).max(3);
-    let max_kind = parsed.iter().map(|p| p.kind.len()).max().unwrap_or(8).max(8);
+    let max_route = parsed
+        .iter()
+        .map(|p| p.route.len())
+        .max()
+        .unwrap_or(8)
+        .max(8);
+    let max_seg = parsed
+        .iter()
+        .map(|p| p.segment.len())
+        .max()
+        .unwrap_or(3)
+        .max(3);
+    let max_kind = parsed
+        .iter()
+        .map(|p| p.kind.len())
+        .max()
+        .unwrap_or(8)
+        .max(8);
 
     let items: Vec<ListItem> = parsed
         .into_iter()
@@ -213,7 +232,10 @@ fn parse_upload_path(path: &str) -> (String, String, String) {
         let parent_tail = parent.rsplit(['/', '_']).next().unwrap_or(parent);
         let parts: Vec<&str> = parent_tail.split("--").collect();
         if parts.len() >= 2 {
-            if let Some(i) = parts.iter().rposition(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())) {
+            if let Some(i) = parts
+                .iter()
+                .rposition(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+            {
                 if i >= 1 {
                     let route = parts[..i].join("--");
                     let segment = parts[i].to_string();
@@ -225,13 +247,19 @@ fn parse_upload_path(path: &str) -> (String, String, String) {
 
     // Otherwise parse the filename / whole tail itself
     let candidate = if filename.contains('_') && filename.contains("--") {
-        filename.rsplit_once('_').map(|(_, rest)| rest).unwrap_or(filename)
+        filename
+            .rsplit_once('_')
+            .map(|(_, rest)| rest)
+            .unwrap_or(filename)
     } else {
         filename
     };
     let parts: Vec<&str> = candidate.split("--").collect();
     if parts.len() >= 2 {
-        if let Some(i) = parts.iter().position(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())) {
+        if let Some(i) = parts
+            .iter()
+            .position(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+        {
             if i >= 1 {
                 let route = parts[..i].join("--");
                 let segment = parts[i].to_string();
@@ -249,13 +277,21 @@ fn parse_upload_path(path: &str) -> (String, String, String) {
 
 fn log_type_from_filename(name: &str) -> String {
     let lower = name.to_ascii_lowercase();
-    if lower.contains("fcamera") { "fcamera".into() }
-    else if lower.contains("ecamera") { "ecamera".into() }
-    else if lower.contains("dcamera") { "dcamera".into() }
-    else if lower.contains("qcamera") { "qcamera".into() }
-    else if lower.contains("qlog") { "qlog".into() }
-    else if lower.contains("rlog") || lower.contains("log") { "log".into() }
-    else { name.split('.').next().unwrap_or(name).to_string() }
+    if lower.contains("fcamera") {
+        "fcamera".into()
+    } else if lower.contains("ecamera") {
+        "ecamera".into()
+    } else if lower.contains("dcamera") {
+        "dcamera".into()
+    } else if lower.contains("qcamera") {
+        "qcamera".into()
+    } else if lower.contains("qlog") {
+        "qlog".into()
+    } else if lower.contains("rlog") || lower.contains("log") {
+        "log".into()
+    } else {
+        name.split('.').next().unwrap_or(name).to_string()
+    }
 }
 
 fn progress_bar(p: f64) -> String {
@@ -263,7 +299,12 @@ fn progress_bar(p: f64) -> String {
     let width = 8;
     let filled = (p * width as f64).round() as usize;
     let empty = width - filled;
-    format!("[{}{}] {:3.0}%", "=".repeat(filled), " ".repeat(empty), p * 100.0)
+    format!(
+        "[{}{}] {:3.0}%",
+        "=".repeat(filled),
+        " ".repeat(empty),
+        p * 100.0
+    )
 }
 
 fn draw_devices(f: &mut Frame, app: &App, area: Rect) {
@@ -318,9 +359,15 @@ fn draw_device(f: &mut Frame, app: &App, area: Rect) {
             d.is_paired,
             d.prime,
             d.openpilot_version.as_deref().unwrap_or("-"),
-            d.last_gps_lat.map(|v| v.to_string()).unwrap_or_else(|| "-".into()),
-            d.last_gps_lng.map(|v| v.to_string()).unwrap_or_else(|| "-".into()),
-            d.last_gps_time.map(|v| v.to_string()).unwrap_or_else(|| "-".into()),
+            d.last_gps_lat
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "-".into()),
+            d.last_gps_lng
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "-".into()),
+            d.last_gps_time
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "-".into()),
         )
     } else {
         "no device selected".into()
@@ -331,7 +378,11 @@ fn draw_device(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_list(f: &mut Frame, items: Vec<ListItem>, selected: usize, area: Rect) {
     let list = List::new(items)
-        .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
         .highlight_symbol("> ");
     let mut state = ListState::default().with_selected(Some(selected));
     f.render_stateful_widget(list, area, &mut state);

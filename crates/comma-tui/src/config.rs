@@ -3,7 +3,7 @@
 //! Uses the shared config from `comma-common` (`~/.config/comma/config.toml`).
 //! Last-used dongle is stored in the state directory, not in config.
 
-pub use comma_common::{resolve_tui_dongle, store_last_dongle, Config};
+pub use comma_common::{Config, resolve_tui_dongle, store_last_dongle};
 
 /// Resolve the active dongle for this TUI session.
 /// Order: CLI flag > COMMA_DONGLE > last-used state file > config default.

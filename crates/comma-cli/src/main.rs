@@ -2,9 +2,9 @@ mod config;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use comma_common::state_dir;
 use comma_common::{FileKind, cutoff_secs, missing_route_paths, resolve_route_name};
 use comma_connect_api::Client;
-use comma_common::state_dir;
 use config::Config;
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
@@ -758,4 +758,3 @@ async fn cmd_upload_recent_routes(
     }
     Ok(())
 }
-

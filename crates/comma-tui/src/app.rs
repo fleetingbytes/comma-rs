@@ -1,6 +1,6 @@
 //! Application state for the comma TUI.
 
-use crate::config::{resolve_active_dongle, store_last_dongle, Config};
+use crate::config::{Config, resolve_active_dongle, store_last_dongle};
 use crate::data::DataMsg;
 use crate::keys::Action;
 use comma_common::{load_fully_uploaded, store_fully_uploaded};
@@ -10,10 +10,17 @@ use std::collections::{HashMap, HashSet};
 /// A user-requested operation that the main loop should execute.
 #[derive(Debug, Clone)]
 pub enum PendingOp {
-    UploadKind { route: String, kind: comma_common::FileKind },
-    UploadRoute { route: String },
+    UploadKind {
+        route: String,
+        kind: comma_common::FileKind,
+    },
+    UploadRoute {
+        route: String,
+    },
     UploadAllListed,
-    CancelSelected { id: String },
+    CancelSelected {
+        id: String,
+    },
     CancelPending,
 }
 
@@ -27,7 +34,13 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub const ALL: &[Tab] = &[Tab::Routes, Tab::Queue, Tab::Device, Tab::Devices, Tab::Help];
+    pub const ALL: &[Tab] = &[
+        Tab::Routes,
+        Tab::Queue,
+        Tab::Device,
+        Tab::Devices,
+        Tab::Help,
+    ];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -79,7 +92,11 @@ pub struct App {
 impl App {
     pub fn new(config: Config, cli_dongle: Option<&str>) -> Self {
         let active_dongle = resolve_active_dongle(&config, cli_dongle);
-        let tab = if active_dongle.is_none() { Tab::Devices } else { Tab::Routes };
+        let tab = if active_dongle.is_none() {
+            Tab::Devices
+        } else {
+            Tab::Routes
+        };
         Self {
             tab,
             selected: 0,
@@ -143,7 +160,9 @@ impl App {
             Action::UploadRoute => {
                 if self.tab == Tab::Routes {
                     if let Some(r) = self.routes.get(self.selected) {
-                        self.pending_op = Some(PendingOp::UploadRoute { route: r.fullname.clone() });
+                        self.pending_op = Some(PendingOp::UploadRoute {
+                            route: r.fullname.clone(),
+                        });
                     }
                 }
             }
@@ -208,7 +227,9 @@ impl App {
             DataMsg::RouteFiles(name, Ok(files)) => {
                 // Determine if fully uploaded (all kinds >= segment count).
                 // We need the route's maxqlog; look it up.
-                let segs = self.routes.iter()
+                let segs = self
+                    .routes
+                    .iter()
                     .find(|r| r.fullname == name)
                     .and_then(|r| r.maxqlog)
                     .map(|m| m + 1)

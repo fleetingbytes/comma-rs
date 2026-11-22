@@ -52,7 +52,10 @@ impl Config {
     }
 
     pub fn path() -> anyhow::Result<std::path::PathBuf> {
-        Ok(confy::get_configuration_file_path(Self::APP_NAME, Some("config"))?)
+        Ok(confy::get_configuration_file_path(
+            Self::APP_NAME,
+            Some("config"),
+        )?)
     }
 
     /// Resolve token: CLI flag > env > config.
@@ -108,12 +111,16 @@ mod tests {
         // Isolate from any ambient COMMA_TOKEN so the test is deterministic.
         let previous = std::env::var("COMMA_TOKEN").ok();
         // Safety: single-threaded test; we restore the previous value immediately after.
-        unsafe { std::env::remove_var("COMMA_TOKEN"); }
+        unsafe {
+            std::env::remove_var("COMMA_TOKEN");
+        }
         let cfg = Config::default();
         let result = cfg.resolve_token(None);
         // Restore before asserting so a panic doesn't leave the env dirty for other tests.
         if let Some(prev) = previous {
-            unsafe { std::env::set_var("COMMA_TOKEN", prev); }
+            unsafe {
+                std::env::set_var("COMMA_TOKEN", prev);
+            }
         }
         let err = result.unwrap_err();
         let msg = err.to_string();

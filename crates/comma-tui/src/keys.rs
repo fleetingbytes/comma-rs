@@ -82,32 +82,188 @@ pub struct Binding {
 /// All bindings, ordered roughly by importance for the status bar.
 pub static BINDINGS: &[Binding] = &[
     // New high-priority route/queue actions (shown first in the hint bar)
-    Binding { action: Action::UploadLog, code: KeyCode::Char('L'), modifiers: KeyModifiers::SHIFT, display: "L", importance: 99 },
-    Binding { action: Action::UploadFCamera, code: KeyCode::Char('F'), modifiers: KeyModifiers::SHIFT, display: "F", importance: 99 },
-    Binding { action: Action::UploadECamera, code: KeyCode::Char('W'), modifiers: KeyModifiers::SHIFT, display: "W", importance: 99 },
-    Binding { action: Action::UploadDCamera, code: KeyCode::Char('D'), modifiers: KeyModifiers::SHIFT, display: "D", importance: 99 },
-    Binding { action: Action::UploadRoute, code: KeyCode::Char('u'), modifiers: KeyModifiers::NONE, display: "u", importance: 98 },
-    Binding { action: Action::UploadAllListed, code: KeyCode::Char('U'), modifiers: KeyModifiers::SHIFT, display: "U", importance: 98 },
-    Binding { action: Action::CancelSelected, code: KeyCode::Char('c'), modifiers: KeyModifiers::NONE, display: "c", importance: 97 },
-    Binding { action: Action::CancelPending, code: KeyCode::Char('C'), modifiers: KeyModifiers::SHIFT, display: "C", importance: 97 },
-    Binding { action: Action::Quit, code: KeyCode::Char('q'), modifiers: KeyModifiers::NONE, display: "q", importance: 100 },
-    Binding { action: Action::ForceQuit, code: KeyCode::Char('Q'), modifiers: KeyModifiers::SHIFT, display: "Q", importance: 1 },
-    Binding { action: Action::Help, code: KeyCode::Char('?'), modifiers: KeyModifiers::NONE, display: "?", importance: 90 },
-    Binding { action: Action::MoveDown, code: KeyCode::Char('j'), modifiers: KeyModifiers::NONE, display: "j", importance: 80 },
-    Binding { action: Action::MoveUp, code: KeyCode::Char('k'), modifiers: KeyModifiers::NONE, display: "k", importance: 80 },
-    Binding { action: Action::MoveDown, code: KeyCode::Down, modifiers: KeyModifiers::NONE, display: "down", importance: 70 },
-    Binding { action: Action::MoveUp, code: KeyCode::Up, modifiers: KeyModifiers::NONE, display: "up", importance: 70 },
-    Binding { action: Action::Select, code: KeyCode::Char(' '), modifiers: KeyModifiers::NONE, display: "space", importance: 60 },
-    Binding { action: Action::Select, code: KeyCode::Enter, modifiers: KeyModifiers::NONE, display: "enter", importance: 50 },
-    Binding { action: Action::NextTab, code: KeyCode::Char('l'), modifiers: KeyModifiers::NONE, display: "l", importance: 40 },
-    Binding { action: Action::PrevTab, code: KeyCode::Char('h'), modifiers: KeyModifiers::NONE, display: "h", importance: 40 },
-    Binding { action: Action::NextTab, code: KeyCode::Right, modifiers: KeyModifiers::NONE, display: "right", importance: 30 },
-    Binding { action: Action::PrevTab, code: KeyCode::Left, modifiers: KeyModifiers::NONE, display: "left", importance: 30 },
-    Binding { action: Action::PageDown, code: KeyCode::Char('f'), modifiers: KeyModifiers::CONTROL, display: "ctrl-f", importance: 20 },
-    Binding { action: Action::PageUp, code: KeyCode::Char('b'), modifiers: KeyModifiers::CONTROL, display: "ctrl-b", importance: 20 },
-    Binding { action: Action::PageDown, code: KeyCode::PageDown, modifiers: KeyModifiers::NONE, display: "pgdn", importance: 15 },
-    Binding { action: Action::PageUp, code: KeyCode::PageUp, modifiers: KeyModifiers::NONE, display: "pgup", importance: 15 },
-    Binding { action: Action::RefreshUploadStatus, code: KeyCode::Char('r'), modifiers: KeyModifiers::CONTROL, display: "ctrl-r", importance: 10 },
+    Binding {
+        action: Action::UploadLog,
+        code: KeyCode::Char('L'),
+        modifiers: KeyModifiers::SHIFT,
+        display: "L",
+        importance: 99,
+    },
+    Binding {
+        action: Action::UploadFCamera,
+        code: KeyCode::Char('F'),
+        modifiers: KeyModifiers::SHIFT,
+        display: "F",
+        importance: 99,
+    },
+    Binding {
+        action: Action::UploadECamera,
+        code: KeyCode::Char('W'),
+        modifiers: KeyModifiers::SHIFT,
+        display: "W",
+        importance: 99,
+    },
+    Binding {
+        action: Action::UploadDCamera,
+        code: KeyCode::Char('D'),
+        modifiers: KeyModifiers::SHIFT,
+        display: "D",
+        importance: 99,
+    },
+    Binding {
+        action: Action::UploadRoute,
+        code: KeyCode::Char('u'),
+        modifiers: KeyModifiers::NONE,
+        display: "u",
+        importance: 98,
+    },
+    Binding {
+        action: Action::UploadAllListed,
+        code: KeyCode::Char('U'),
+        modifiers: KeyModifiers::SHIFT,
+        display: "U",
+        importance: 98,
+    },
+    Binding {
+        action: Action::CancelSelected,
+        code: KeyCode::Char('c'),
+        modifiers: KeyModifiers::NONE,
+        display: "c",
+        importance: 97,
+    },
+    Binding {
+        action: Action::CancelPending,
+        code: KeyCode::Char('C'),
+        modifiers: KeyModifiers::SHIFT,
+        display: "C",
+        importance: 97,
+    },
+    Binding {
+        action: Action::Quit,
+        code: KeyCode::Char('q'),
+        modifiers: KeyModifiers::NONE,
+        display: "q",
+        importance: 100,
+    },
+    Binding {
+        action: Action::ForceQuit,
+        code: KeyCode::Char('Q'),
+        modifiers: KeyModifiers::SHIFT,
+        display: "Q",
+        importance: 1,
+    },
+    Binding {
+        action: Action::Help,
+        code: KeyCode::Char('?'),
+        modifiers: KeyModifiers::NONE,
+        display: "?",
+        importance: 90,
+    },
+    Binding {
+        action: Action::MoveDown,
+        code: KeyCode::Char('j'),
+        modifiers: KeyModifiers::NONE,
+        display: "j",
+        importance: 80,
+    },
+    Binding {
+        action: Action::MoveUp,
+        code: KeyCode::Char('k'),
+        modifiers: KeyModifiers::NONE,
+        display: "k",
+        importance: 80,
+    },
+    Binding {
+        action: Action::MoveDown,
+        code: KeyCode::Down,
+        modifiers: KeyModifiers::NONE,
+        display: "down",
+        importance: 70,
+    },
+    Binding {
+        action: Action::MoveUp,
+        code: KeyCode::Up,
+        modifiers: KeyModifiers::NONE,
+        display: "up",
+        importance: 70,
+    },
+    Binding {
+        action: Action::Select,
+        code: KeyCode::Char(' '),
+        modifiers: KeyModifiers::NONE,
+        display: "space",
+        importance: 60,
+    },
+    Binding {
+        action: Action::Select,
+        code: KeyCode::Enter,
+        modifiers: KeyModifiers::NONE,
+        display: "enter",
+        importance: 50,
+    },
+    Binding {
+        action: Action::NextTab,
+        code: KeyCode::Char('l'),
+        modifiers: KeyModifiers::NONE,
+        display: "l",
+        importance: 40,
+    },
+    Binding {
+        action: Action::PrevTab,
+        code: KeyCode::Char('h'),
+        modifiers: KeyModifiers::NONE,
+        display: "h",
+        importance: 40,
+    },
+    Binding {
+        action: Action::NextTab,
+        code: KeyCode::Right,
+        modifiers: KeyModifiers::NONE,
+        display: "right",
+        importance: 30,
+    },
+    Binding {
+        action: Action::PrevTab,
+        code: KeyCode::Left,
+        modifiers: KeyModifiers::NONE,
+        display: "left",
+        importance: 30,
+    },
+    Binding {
+        action: Action::PageDown,
+        code: KeyCode::Char('f'),
+        modifiers: KeyModifiers::CONTROL,
+        display: "ctrl-f",
+        importance: 20,
+    },
+    Binding {
+        action: Action::PageUp,
+        code: KeyCode::Char('b'),
+        modifiers: KeyModifiers::CONTROL,
+        display: "ctrl-b",
+        importance: 20,
+    },
+    Binding {
+        action: Action::PageDown,
+        code: KeyCode::PageDown,
+        modifiers: KeyModifiers::NONE,
+        display: "pgdn",
+        importance: 15,
+    },
+    Binding {
+        action: Action::PageUp,
+        code: KeyCode::PageUp,
+        modifiers: KeyModifiers::NONE,
+        display: "pgup",
+        importance: 15,
+    },
+    Binding {
+        action: Action::RefreshUploadStatus,
+        code: KeyCode::Char('r'),
+        modifiers: KeyModifiers::CONTROL,
+        display: "ctrl-r",
+        importance: 10,
+    },
 ];
 
 /// Map a key event to an action, if bound.
@@ -120,16 +276,22 @@ pub static BINDINGS: &[Binding] = &[
 ///   on some terminals) mapped back to the letter.
 pub fn action_for(key: &KeyEvent) -> Option<Action> {
     // 1. Exact match
-    if let Some(b) = BINDINGS.iter().find(|b| b.code == key.code && b.modifiers == key.modifiers) {
+    if let Some(b) = BINDINGS
+        .iter()
+        .find(|b| b.code == key.code && b.modifiers == key.modifiers)
+    {
         return Some(b.action);
     }
 
     // 2. CONTROL or SHIFT + char, ignoring extra modifiers
-    if key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::SHIFT) {
+    if key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::SHIFT)
+    {
         if let KeyCode::Char(c) = key.code {
             let letter = c.to_ascii_lowercase();
             if let Some(b) = BINDINGS.iter().find(|b| {
-                (b.modifiers.contains(KeyModifiers::CONTROL) || b.modifiers.contains(KeyModifiers::SHIFT) || b.modifiers.is_empty())
+                (b.modifiers.contains(KeyModifiers::CONTROL)
+                    || b.modifiers.contains(KeyModifiers::SHIFT)
+                    || b.modifiers.is_empty())
                     && matches!(b.code, KeyCode::Char(bc) if bc.to_ascii_lowercase() == letter)
             }) {
                 return Some(b.action);
@@ -164,7 +326,11 @@ pub fn action_for(key: &KeyEvent) -> Option<Action> {
 
 /// Display strings for an action (may be multiple).
 pub fn displays_for(action: Action) -> Vec<&'static str> {
-    BINDINGS.iter().filter(|b| b.action == action).map(|b| b.display).collect()
+    BINDINGS
+        .iter()
+        .filter(|b| b.action == action)
+        .map(|b| b.display)
+        .collect()
 }
 
 /// Ranked bindings for the bottom bar (highest importance first).
@@ -190,7 +356,10 @@ mod tests {
         let ev = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL);
         assert_eq!(action_for(&ev), Some(Action::RefreshUploadStatus));
         // Extra modifiers should still match
-        let ev = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL | KeyModifiers::SHIFT);
+        let ev = KeyEvent::new(
+            KeyCode::Char('r'),
+            KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+        );
         assert_eq!(action_for(&ev), Some(Action::RefreshUploadStatus));
         // Raw control character (some terminals)
         let ev = KeyEvent::new(KeyCode::Char('\u{12}'), KeyModifiers::NONE);

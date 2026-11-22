@@ -1,6 +1,6 @@
+use comma_connect_api::RouteFiles;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
-use comma_connect_api::RouteFiles;
 
 /// Upload status for one file type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,7 +66,14 @@ mod tests {
     use comma_connect_api::RouteFiles;
     use ratatui::style::Color;
 
-    fn files_with(qlogs: usize, qcams: usize, logs: usize, cams: usize, ecams: usize, dcams: usize) -> RouteFiles {
+    fn files_with(
+        qlogs: usize,
+        qcams: usize,
+        logs: usize,
+        cams: usize,
+        ecams: usize,
+        dcams: usize,
+    ) -> RouteFiles {
         RouteFiles {
             qlogs: vec!["x".into(); qlogs],
             qcameras: vec!["x".into(); qcams],

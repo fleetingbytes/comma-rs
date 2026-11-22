@@ -41,7 +41,6 @@ pub fn store_last_dongle(dongle_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-
 const FULLY_UPLOADED_FILE: &str = "fully-uploaded-routes.ron";
 
 /// Load the set of route fullnames known to be fully uploaded.
